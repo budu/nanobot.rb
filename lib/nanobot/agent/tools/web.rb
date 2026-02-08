@@ -1,0 +1,125 @@
+# frozen_string_literal: true
+
+require 'faraday'
+require 'json'
+require 'nokogiri'
+require 'ruby_llm'
+
+module Nanobot
+  module Agent
+    module Tools
+      # Tool for web search using Brave Search API
+      class WebSearch < RubyLLM::Tool
+        description 'Search the web using Brave Search API'
+        param :query, desc: 'Search query', required: true
+        param :count, type: 'integer', desc: 'Number of results to return (default: 5)', required: false
+
+        def initialize(api_key: nil)
+          super()
+          @api_key = api_key || ENV.fetch('BRAVE_SEARCH_API_KEY', nil)
+        end
+
+        def execute(query:, count: 5)
+          return 'Error: Brave Search API key not configured' unless @api_key
+
+          begin
+            response = search(query, count)
+            format_results(response)
+          rescue StandardError => e
+            "Error performing web search: #{e.message}"
+          end
+        end
+
+        private
+
+        def search(query, count)
+          conn = Faraday.new(url: 'https://api.search.brave.com') do |f|
+            f.request :url_encoded
+            f.adapter Faraday.default_adapter
+          end
+
+          response = conn.get('/res/v1/web/search') do |req|
+            req.headers['X-Subscription-Token'] = @api_key
+            req.headers['Accept'] = 'application/json'
+            req.params['q'] = query
+            req.params['count'] = count
+          end
+
+          JSON.parse(response.body)
+        end
+
+        def format_results(response)
+          results = response['web']['results'] || []
+
+          return 'No results found' if results.empty?
+
+          output = ['Search results:']
+          results.each_with_index do |result, idx|
+            output << "\n#{idx + 1}. #{result['title']}"
+            output << "   URL: #{result['url']}"
+            output << "   #{result['description']}" if result['description']
+          end
+
+          output.join("\n")
+        end
+      end
+
+      # Tool for fetching and parsing web pages
+      class WebFetch < RubyLLM::Tool
+        description 'Fetch and parse a web page, returning its main content'
+        param :url, desc: 'URL of the web page to fetch', required: true
+
+        def execute(url:)
+          content = fetch(url)
+          parse_content(content, url)
+        rescue StandardError => e
+          "Error fetching web page: #{e.message}"
+        end
+
+        private
+
+        def fetch(url)
+          conn = Faraday.new do |f|
+            f.adapter Faraday.default_adapter
+          end
+
+          response = conn.get(url) do |req|
+            req.headers['User-Agent'] = 'Mozilla/5.0 (compatible; Nanobot/1.0)'
+          end
+
+          response.body
+        end
+
+        def parse_content(html, url)
+          doc = Nokogiri::HTML(html)
+
+          # Remove script and style tags
+          doc.css('script, style').each(&:remove)
+
+          # Get title
+          title = doc.at_css('title')&.text&.strip || 'Untitled'
+
+          # Try to get main content
+          main_content = doc.at_css('main, article, [role="main"]')
+          main_content ||= doc.at_css('body')
+
+          # Extract text
+          text = main_content&.text || ''
+          text = text.gsub(/\s+/, ' ').strip
+
+          # Truncate if too long
+          max_length = 5000
+          text = "#{text[0...max_length]}... (truncated)" if text.length > max_length
+
+          <<~OUTPUT
+            Title: #{title}
+            URL: #{url}
+
+            Content:
+            #{text}
+          OUTPUT
+        end
+      end
+    end
+  end
+end
