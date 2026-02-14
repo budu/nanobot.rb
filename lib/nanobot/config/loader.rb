@@ -43,6 +43,7 @@ module Nanobot
           data = config_to_hash(config)
 
           config_path.write(JSON.pretty_generate(data))
+          FileUtils.chmod(0o600, config_path)
         end
 
         # Get config path

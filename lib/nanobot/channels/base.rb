@@ -38,10 +38,14 @@ module Nanobot
       def allowed?(sender_id)
         allow_from = config.allow_from || []
 
-        # Empty list means allow all
-        return true if allow_from.empty?
+        if allow_from.empty?
+          unless @allow_from_warned
+            @logger.warn "Channel '#{@name}' has no allow_from restrictions - accepting all senders"
+            @allow_from_warned = true
+          end
+          return true
+        end
 
-        # Check if sender is in whitelist
         allow_from.include?(sender_id.to_s)
       end
 

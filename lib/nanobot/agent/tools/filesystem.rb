@@ -8,16 +8,31 @@ module Nanobot
     module Tools
       # Shared module for workspace directory sandboxing.
       # Ensures paths cannot escape the allowed directory via prefix tricks
-      # (e.g., /home/user/workspace_evil bypassing /home/user/workspace).
+      # (e.g., /home/user/workspace_evil bypassing /home/user/workspace)
+      # or symlink-based escapes (e.g., ln -s /etc /workspace/escape).
       module WorkspaceSandbox
         private
 
         def within_allowed_dir?(path)
           return true unless @allowed_dir
 
-          expanded = path.expand_path.to_s
+          resolved = resolve_real_path(path)
           allowed = "#{@allowed_dir}/"
-          expanded.start_with?(allowed) || expanded == @allowed_dir.to_s
+          resolved.start_with?(allowed) || resolved == @allowed_dir.to_s
+        end
+
+        def resolve_real_path(path)
+          expanded = path.expand_path
+          if expanded.exist?
+            expanded.realpath.to_s
+          elsif expanded.dirname.exist?
+            # File doesn't exist yet (e.g., WriteFile creating a new file)
+            # Resolve the parent directory and append the basename
+            "#{expanded.dirname.realpath}/#{expanded.basename}"
+          else
+            # Neither file nor parent exists — use expand_path as fallback
+            expanded.to_s
+          end
         end
       end
 

@@ -74,6 +74,7 @@ module Nanobot
         @workspace = Pathname.new(workspace).expand_path
         @sessions_dir = Pathname.new(File.expand_path('~/.nanobot/sessions'))
         @sessions_dir.mkpath unless @sessions_dir.exist?
+        FileUtils.chmod(0o700, @sessions_dir) if @sessions_dir.exist?
         @cache = {}
       end
 
@@ -109,6 +110,8 @@ module Nanobot
             f.puts(JSON.generate(msg))
           end
         end
+
+        FileUtils.chmod(0o600, path)
 
         @cache[session.key] = session
       end

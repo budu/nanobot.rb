@@ -22,6 +22,7 @@ module Nanobot
         brave_api_key: nil,
         exec_config: {},
         restrict_to_workspace: false,
+        confirm_tool_call: nil,
         logger: nil
       )
         @bus = bus
@@ -32,6 +33,7 @@ module Nanobot
         @brave_api_key = brave_api_key
         @exec_config = exec_config
         @restrict_to_workspace = restrict_to_workspace
+        @confirm_tool_call = confirm_tool_call
         @logger = logger || Logger.new(IO::NULL)
 
         @context = ContextBuilder.new(@workspace, logger: @logger)
@@ -185,15 +187,20 @@ module Nanobot
               @logger.debug "Executing tool: #{tool_call.name} id=#{tool_call.id}"
               @logger.debug "  Arguments: #{tool_call.arguments}"
 
-              # Find the matching RubyLLM tool instance
-              tool = @tool_instances.find { |t| t.name == tool_call.name }
-
-              if tool
-                # Execute using RubyLLM tool's call method
-                result = tool.call(tool_call.arguments)
-                result_str = result.is_a?(String) ? result : result.to_s
+              # Check user confirmation callback before executing
+              if @confirm_tool_call && !@confirm_tool_call.call(tool_call.name, tool_call.arguments)
+                result_str = 'Error: Tool execution was denied by user.'
               else
-                result_str = "Error: Tool '#{tool_call.name}' not found"
+                # Find the matching RubyLLM tool instance
+                tool = @tool_instances.find { |t| t.name == tool_call.name }
+
+                if tool
+                  # Execute using RubyLLM tool's call method
+                  result = tool.call(tool_call.arguments)
+                  result_str = result.is_a?(String) ? result : result.to_s
+                else
+                  result_str = "Error: Tool '#{tool_call.name}' not found"
+                end
               end
 
               @logger.debug "  Result (#{result_str.length} chars): #{result_str.slice(0, 1000)}"

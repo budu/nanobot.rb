@@ -29,6 +29,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'json', '~> 2.6'
   spec.add_dependency 'logger', '~> 1.5'
   spec.add_dependency 'nokogiri', '~> 1.15'
-  spec.add_dependency 'ruby_llm' # RubyLLM gem
+  spec.add_dependency 'ruby_llm', '~> 1.0'
   spec.add_dependency 'thor', '~> 1.3'
 end

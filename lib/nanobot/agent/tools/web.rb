@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require 'faraday'
+require 'ipaddr'
 require 'json'
 require 'nokogiri'
+require 'resolv'
 require 'ruby_llm'
+require 'uri'
 
 module Nanobot
   module Agent
@@ -69,7 +72,27 @@ module Nanobot
         description 'Fetch and parse a web page, returning its main content'
         param :url, desc: 'URL of the web page to fetch', required: true
 
+        MAX_RESPONSE_BYTES = 1_048_576 # 1 MB
+        OPEN_TIMEOUT = 10
+        READ_TIMEOUT = 15
+        MAX_REDIRECTS = 5
+
+        PRIVATE_RANGES = [
+          IPAddr.new('0.0.0.0/8'),
+          IPAddr.new('127.0.0.0/8'),
+          IPAddr.new('10.0.0.0/8'),
+          IPAddr.new('172.16.0.0/12'),
+          IPAddr.new('192.168.0.0/16'),
+          IPAddr.new('169.254.0.0/16'),
+          IPAddr.new('::1/128'),
+          IPAddr.new('fc00::/7'),
+          IPAddr.new('fe80::/10')
+        ].freeze
+
+        USER_AGENT = 'Mozilla/5.0 (compatible)'
+
         def execute(url:)
+          validate_url!(url)
           content = fetch(url)
           parse_content(content, url)
         rescue StandardError => e
@@ -78,16 +101,52 @@ module Nanobot
 
         private
 
+        def validate_url!(url)
+          uri = URI.parse(url)
+          raise 'Invalid URL scheme: only http and https are allowed' unless %w[http https].include?(uri.scheme)
+          raise 'URL must include a host' unless uri.host
+
+          addresses = Resolv.getaddresses(uri.host)
+          raise "Could not resolve hostname: #{uri.host}" if addresses.empty?
+
+          addresses.each do |addr|
+            ip = IPAddr.new(addr)
+            if PRIVATE_RANGES.any? { |range| range.include?(ip) }
+              raise "Access to private/internal address #{addr} is not allowed"
+            end
+          end
+        end
+
         def fetch(url)
-          conn = Faraday.new do |f|
-            f.adapter Faraday.default_adapter
-          end
+          redirects = 0
+          current_url = url
 
-          response = conn.get(url) do |req|
-            req.headers['User-Agent'] = 'Mozilla/5.0 (compatible; Nanobot/1.0)'
-          end
+          loop do
+            conn = Faraday.new do |f|
+              f.options.open_timeout = OPEN_TIMEOUT
+              f.options.timeout = READ_TIMEOUT
+              f.adapter Faraday.default_adapter
+            end
 
-          response.body
+            response = conn.get(current_url) do |req|
+              req.headers['User-Agent'] = USER_AGENT
+            end
+
+            if [301, 302, 303, 307, 308].include?(response.status)
+              redirects += 1
+              raise 'Too many redirects' if redirects > MAX_REDIRECTS
+
+              current_url = response.headers['location']
+              raise 'Redirect with no Location header' unless current_url
+
+              validate_url!(current_url)
+              next
+            end
+
+            body = response.body
+            body = body.byteslice(0, MAX_RESPONSE_BYTES) if body && body.bytesize > MAX_RESPONSE_BYTES
+            return body
+          end
         end
 
         def parse_content(html, url)
