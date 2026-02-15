@@ -68,13 +68,13 @@ module Nanobot
         end
         @logger.debug "History: #{history.length} messages"
 
+        # Add channel context as a separate system message if provided
+        if channel && chat_id
+          messages << { role: 'system', content: "Current channel: #{channel}, Chat ID: #{chat_id}" }
+        end
+
         # Add current message
-        user_content = current_message
-
-        # Add channel context if provided
-        user_content = "#{user_content}\n\n[Context: Channel=#{channel}, ChatID=#{chat_id}]" if channel && chat_id
-
-        messages << { role: 'user', content: user_content }
+        messages << { role: 'user', content: current_message }
         @logger.debug "Built #{messages.length} messages for LLM"
 
         messages

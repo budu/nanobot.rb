@@ -115,23 +115,29 @@ RSpec.describe Nanobot::Agent::ContextBuilder do
       expect(messages[2][:content]).to eq('Previous response')
     end
 
-    it 'adds channel context when provided' do
+    it 'adds channel context as a separate system message when provided' do
       messages = context_builder.build_messages(
         current_message: 'Hello',
         channel: 'telegram',
         chat_id: 'chat123'
       )
 
-      user_msg = messages.find { |m| m[:role] == 'user' }
-      expect(user_msg[:content]).to include('Channel=telegram')
-      expect(user_msg[:content]).to include('ChatID=chat123')
+      # Channel context should be in its own system message, not in user message
+      user_msg = messages.last
+      expect(user_msg[:role]).to eq('user')
+      expect(user_msg[:content]).to eq('Hello')
+
+      context_msg = messages[-2]
+      expect(context_msg[:role]).to eq('system')
+      expect(context_msg[:content]).to include('telegram')
+      expect(context_msg[:content]).to include('chat123')
     end
 
     it 'does not add channel context when not provided' do
       messages = context_builder.build_messages(current_message: 'Hello')
 
-      user_msg = messages.find { |m| m[:role] == 'user' }
-      expect(user_msg[:content]).not_to include('Channel=')
+      system_msgs = messages.select { |m| m[:role] == 'system' }
+      expect(system_msgs.length).to eq(1) # Only the main system prompt
     end
 
     it 'orders messages correctly' do
@@ -292,8 +298,9 @@ RSpec.describe Nanobot::Agent::ContextBuilder do
       expect(messages[0][:content]).to include('Instructions')
       expect(messages[1][:content]).to eq('First message')
       expect(messages[2][:content]).to eq('First response')
-      expect(messages[3][:content]).to include('Second message')
-      expect(messages[3][:content]).to include('Channel=telegram')
+      expect(messages[3][:role]).to eq('system')
+      expect(messages[3][:content]).to include('telegram')
+      expect(messages[4][:content]).to eq('Second message')
     end
   end
 end
