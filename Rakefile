@@ -14,9 +14,9 @@ end
 
 desc 'Run console with nanobot loaded'
 task :console do
-  require 'pry'
+  require 'irb'
   require_relative 'lib/nanobot'
-  Pry.start
+  IRB.start
 end
 
 desc 'Clean generated files'

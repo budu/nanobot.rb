@@ -1,10 +1,8 @@
 # Nanobot.rb
 
 [![Ruby](https://img.shields.io/badge/Ruby-4.0%2B-blue)](https://www.ruby-lang.org/)
-[![Test Coverage](https://img.shields.io/badge/coverage-95.38%25-brightgreen)](https://github.com/simplecov-ruby/simplecov)
-[![RSpec Tests](https://img.shields.io/badge/tests-348%20passing-brightgreen)](https://rspec.info/)
 
-A Ruby port of [Nanobot](https://github.com/nanobot-ai/nanobot) - an ultra-lightweight personal AI assistant framework designed for simplicity, extensibility, and security.
+A Ruby port of [Nanobot](https://github.com/nanobot-ai/nanobot) - a lightweight, modular personal AI assistant framework designed for simplicity, extensibility, and security.
 
 ## Overview
 
@@ -42,7 +40,7 @@ Nanobot.rb is a clean, modular AI agent framework that provides a foundation for
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nanobot.rb
+git clone https://github.com/nanobot-rb/nanobot.rb
 cd nanobot.rb
 
 # Install dependencies
@@ -98,7 +96,7 @@ bundle exec bin/nanobot agent
 bundle exec bin/nanobot agent -m "What's the weather like?"
 
 # With specific model
-bundle exec bin/nanobot agent --model openai/gpt-5-mini -m "Write a haiku"
+bundle exec bin/nanobot agent --model openai/gpt-4o-mini -m "Write a haiku"
 ```
 
 ## Configuration
@@ -183,7 +181,7 @@ bundle exec bin/nanobot agent
 bundle exec bin/nanobot agent -m "Calculate fibonacci(10)"
 
 # Use specific model
-bundle exec bin/nanobot agent --model openai/gpt-5-mini
+bundle exec bin/nanobot agent --model openai/gpt-4o-mini
 
 # Check configuration
 bundle exec bin/nanobot status
@@ -197,15 +195,25 @@ bundle exec bin/nanobot onboard
 ```ruby
 require 'nanobot'
 
-# Initialize agent
-config = Nanobot::Config::Loader.new.load
-provider = Nanobot::Providers::RubyLLMProvider.new(config: config)
-agent = Nanobot::Agent::Loop.new(
-  provider: provider,
-  config: config
+# Load configuration
+config = Nanobot::Config::Loader.load
+
+# Create provider
+provider = Nanobot::Providers::RubyLLMProvider.new(
+  api_key: config.api_key,
+  provider: config.provider,
+  default_model: config.agents.defaults.model
 )
 
-# Process message
+# Create message bus and agent loop
+bus = Nanobot::Bus::MessageBus.new
+agent = Nanobot::Agent::Loop.new(
+  bus: bus,
+  provider: provider,
+  workspace: File.expand_path(config.agents.defaults.workspace)
+)
+
+# Process a single message directly
 response = agent.process_direct("What is 2+2?")
 puts response
 ```
@@ -338,7 +346,7 @@ bundle exec rspec
 bundle exec rspec spec/agent/loop_spec.rb
 ```
 
-Current test coverage: **95.38%** (929/974 lines)
+Run `bundle exec rspec` to see current test coverage.
 
 ### Code Style
 
@@ -359,12 +367,9 @@ lib/nanobot/
 │   ├── context.rb           # System prompt builder
 │   ├── memory.rb            # Memory management
 │   └── tools/
-│       ├── base.rb          # Tool base class
-│       ├── registry.rb      # Tool registration
 │       ├── filesystem.rb    # File operations
 │       ├── shell.rb         # Shell execution
-│       ├── web.rb           # Web tools
-│       └── message.rb       # Message sending
+│       └── web.rb           # Web tools
 ├── bus/
 │   ├── events.rb            # Event definitions
 │   └── message_bus.rb       # Message routing
@@ -390,7 +395,7 @@ lib/nanobot/
 ```
 User Input → Channel → Message Bus → Agent Loop → LLM Provider
                             ↓              ↓
-                     Session Manager   Tool Registry
+                     Session Manager   Tool System
                             ↓              ↓
                       JSONL Storage   Tool Execution
 ```
@@ -399,7 +404,7 @@ User Input → Channel → Message Bus → Agent Loop → LLM Provider
 
 - **Message Bus**: Queue-based message routing with pub/sub pattern
 - **Agent Loop**: Tool-calling loop with LLM integration
-- **Tool Registry**: Dynamic tool management and validation
+- **Tool System**: RubyLLM-based tools directly instantiated by the agent
 - **Session Manager**: JSONL-based conversation persistence
 - **Context Builder**: System prompt assembly from bootstrap files
 - **Memory Store**: Long-term and daily memory management
@@ -409,52 +414,31 @@ User Input → Channel → Message Bus → Agent Loop → LLM Provider
 #### Creating Custom Tools
 
 ```ruby
-class WeatherTool < Nanobot::Agent::Tools::Tool
-  def name
-    'get_weather'
-  end
-
-  def description
-    'Get current weather for a location'
-  end
-
-  def parameters
-    {
-      'type' => 'object',
-      'properties' => {
-        'location' => {
-          'type' => 'string',
-          'description' => 'City name or coordinates'
-        }
-      },
-      'required' => ['location']
-    }
-  end
+class WeatherTool < RubyLLM::Tool
+  description 'Get current weather for a location'
+  param :location, desc: 'City name or coordinates', required: true
 
   def execute(location:)
-    # Implementation here
-    "Weather in #{location}: Sunny, 72°F"
+    # Your implementation here
+    "Weather in #{location}: Sunny, 72F"
   end
 end
-
-# Register the tool
-registry = Nanobot::Agent::Tools::Registry.new
-registry.register(WeatherTool.new)
 ```
+
+Custom tools are `RubyLLM::Tool` instances passed directly to the agent loop.
 
 #### Creating Custom Channels
 
 ```ruby
 class SlackChannel < Nanobot::Channels::BaseChannel
   def start
-    # Connect to Slack
     @client = Slack::Client.new(token: @config['token'])
 
     @client.on(:message) do |message|
-      _handle_message(
-        content: message.text,
+      handle_message(
+        sender_id: message.user,
         chat_id: message.channel,
-        from_user: message.user
+        content: message.text
       )
     end
 
@@ -473,33 +457,6 @@ class SlackChannel < Nanobot::Channels::BaseChannel
   end
 end
 ```
-
-## Performance
-
-- **Test Suite**: 348 tests, 0 failures
-- **Test Coverage**: 95.38% (929/974 lines)
-- **Test Runtime**: ~2.5 seconds
-- **Ruby Version**: 4.0+ compatible
-- **Memory Usage**: ~50MB baseline
-- **Response Time**: <100ms for local operations
-
-## Comparison with Python Nanobot
-
-This Ruby port maintains architectural parity with the Python original:
-
-### What's the Same
-- Core architecture and message flow
-- Tool system design and capabilities
-- Session/memory storage format (JSONL)
-- Configuration structure
-- Security model and sandboxing
-
-### Key Differences
-- **Concurrency**: Ruby Threads vs Python asyncio
-- **Type System**: Duck typing vs Pydantic validation
-- **LLM Integration**: RubyLLM gem vs LiteLLM
-- **CLI Framework**: Thor vs Typer
-- **Package Management**: Bundler/Gems vs pip/packages
 
 ## Contributing
 
@@ -523,16 +480,6 @@ This is a Ruby port of the original [Nanobot](https://github.com/nanobot-ai/nano
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/nanobot.rb/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/nanobot.rb/discussions)
+- **Issues**: [GitHub Issues](https://github.com/nanobot-rb/nanobot.rb/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/nanobot-rb/nanobot.rb/discussions)
 - **Documentation**: [docs/](docs/) directory
-
-## Roadmap
-
-- [ ] Gem packaging and release
-- [ ] Additional channel implementations
-- [ ] Plugin system for tools
-- [ ] Web UI for configuration
-- [ ] Docker container support
-- [ ] Enhanced memory capabilities
-- [ ] Multi-agent coordination

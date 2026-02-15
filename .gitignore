@@ -1,3 +1,11 @@
 .rspec_status
 /coverage
 /nanobot
+*.gem
+/pkg
+/tmp
+/.bundle
+/vendor/bundle
+.env
+/doc
+Gemfile.lock
