@@ -40,8 +40,111 @@ RSpec.describe Nanobot::Agent::Tools::WebSearch do
       expect(result).to include('Error: Brave Search API key not configured')
     end
 
-    # NOTE: Additional tests would require webmock stubs for the Brave API
-    # These are skipped to avoid complex HTTP mocking in this test suite
+    it 'returns formatted results for a successful search' do
+      response_body = {
+        web: {
+          results: [
+            { title: 'Ruby Language', url: 'https://ruby-lang.org', description: 'The Ruby programming language' },
+            { title: 'RubyGems', url: 'https://rubygems.org', description: 'Find and install Ruby gems' }
+          ]
+        }
+      }.to_json
+
+      stub_request(:get, 'https://api.search.brave.com/res/v1/web/search')
+        .with(
+          headers: { 'X-Subscription-Token' => api_key },
+          query: hash_including('q' => 'ruby programming')
+        )
+        .to_return(status: 200, body: response_body, headers: { 'Content-Type' => 'application/json' })
+
+      result = tool.execute(query: 'ruby programming')
+      expect(result).to include('Search results:')
+      expect(result).to include('1. Ruby Language')
+      expect(result).to include('URL: https://ruby-lang.org')
+      expect(result).to include('The Ruby programming language')
+      expect(result).to include('2. RubyGems')
+      expect(result).to include('URL: https://rubygems.org')
+    end
+
+    it 'returns no results message when results are empty' do
+      response_body = { web: { results: [] } }.to_json
+
+      stub_request(:get, 'https://api.search.brave.com/res/v1/web/search')
+        .with(
+          headers: { 'X-Subscription-Token' => api_key },
+          query: hash_including('q' => 'xyznonexistent')
+        )
+        .to_return(status: 200, body: response_body, headers: { 'Content-Type' => 'application/json' })
+
+      result = tool.execute(query: 'xyznonexistent')
+      expect(result).to eq('No results found')
+    end
+
+    it 'handles API error responses gracefully' do
+      stub_request(:get, 'https://api.search.brave.com/res/v1/web/search')
+        .with(
+          headers: { 'X-Subscription-Token' => api_key },
+          query: hash_including('q' => 'test')
+        )
+        .to_return(status: 500, body: 'Internal Server Error')
+
+      result = tool.execute(query: 'test')
+      expect(result).to include('Error performing web search')
+    end
+
+    it 'handles network errors gracefully' do
+      stub_request(:get, 'https://api.search.brave.com/res/v1/web/search')
+        .with(
+          headers: { 'X-Subscription-Token' => api_key },
+          query: hash_including('q' => 'test')
+        )
+        .to_raise(Faraday::ConnectionFailed.new('connection failed'))
+
+      result = tool.execute(query: 'test')
+      expect(result).to include('Error performing web search')
+    end
+
+    it 'passes count parameter to the API' do
+      response_body = {
+        web: {
+          results: [
+            { title: 'Result 1', url: 'https://example.com/1', description: 'First result' }
+          ]
+        }
+      }.to_json
+
+      stub_request(:get, 'https://api.search.brave.com/res/v1/web/search')
+        .with(
+          headers: { 'X-Subscription-Token' => api_key },
+          query: hash_including('q' => 'test', 'count' => '3')
+        )
+        .to_return(status: 200, body: response_body, headers: { 'Content-Type' => 'application/json' })
+
+      result = tool.execute(query: 'test', count: 3)
+      expect(result).to include('Search results:')
+      expect(result).to include('1. Result 1')
+    end
+
+    it 'handles results without description' do
+      response_body = {
+        web: {
+          results: [
+            { title: 'No Description', url: 'https://example.com/nodesc' }
+          ]
+        }
+      }.to_json
+
+      stub_request(:get, 'https://api.search.brave.com/res/v1/web/search')
+        .with(
+          headers: { 'X-Subscription-Token' => api_key },
+          query: hash_including('q' => 'test')
+        )
+        .to_return(status: 200, body: response_body, headers: { 'Content-Type' => 'application/json' })
+
+      result = tool.execute(query: 'test')
+      expect(result).to include('1. No Description')
+      expect(result).to include('URL: https://example.com/nodesc')
+    end
   end
 end
 
