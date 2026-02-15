@@ -10,7 +10,7 @@ Nanobot.rb is a clean, modular AI agent framework that provides a foundation for
 
 - 🤖 **Multi-provider LLM support** via RubyLLM (OpenAI, Anthropic, OpenRouter, Groq, etc.)
 - 🔧 **Extensible tool system** with built-in file, shell, and web capabilities
-- 💬 **Multi-channel communication** architecture (Telegram, Discord, etc.)
+- 💬 **Multi-channel communication** architecture (extensible for Telegram, Discord, etc.)
 - 💾 **Persistent memory** and conversation session management
 - 🛡️ **Security-first design** with workspace sandboxing and command filtering
 
@@ -67,7 +67,7 @@ bundle exec bin/nanobot onboard
 This creates the configuration directory at `~/.nanobot/` with:
 - `config.json` - Main configuration file
 - `workspace/` - Agent workspace directory
-- `workspace/sessions/` - Conversation history storage
+- `sessions/` - Conversation history storage
 
 ### 2. Configure API Keys
 
@@ -117,6 +117,7 @@ Configuration is stored in `~/.nanobot/config.json`:
       "api_key": "sk-..."
     }
   },
+  "provider": "anthropic",
   "agents": {
     "defaults": {
       "model": "claude-haiku-4-5",
@@ -126,17 +127,6 @@ Configuration is stored in `~/.nanobot/config.json`:
       "max_tool_iterations": 20
     }
   },
-  "channels": {
-    "telegram": {
-      "enabled": false,
-      "token": "YOUR_BOT_TOKEN",
-      "allow_from": ["username1", "username2"]
-    },
-    "discord": {
-      "enabled": false,
-      "token": "YOUR_BOT_TOKEN"
-    }
-  },
   "tools": {
     "web": {
       "search": {
@@ -144,13 +134,9 @@ Configuration is stored in `~/.nanobot/config.json`:
       }
     },
     "exec": {
-      "timeout": 60,
-      "restrict_to_workspace": false
-    }
-  },
-  "sessions": {
-    "defaultId": "main",
-    "path": "~/.nanobot/workspace/sessions"
+      "timeout": 60
+    },
+    "restrict_to_workspace": false
   }
 }
 ```
@@ -159,15 +145,14 @@ Configuration is stored in `~/.nanobot/config.json`:
 
 | Section            | Key                    | Description                         | Default                  |
 |--------------------|------------------------|-------------------------------------|--------------------------|
+| `provider`         |                        | Active provider name                | `anthropic`              |
 | `agents.defaults`  | `model`                | Default LLM model                   | `claude-haiku-4-5`       |
 |                    | `workspace`            | Agent workspace directory           | `~/.nanobot/workspace`   |
 |                    | `max_tokens`           | Maximum response tokens             | `4096`                   |
 |                    | `temperature`          | LLM temperature (0-1)               | `0.7`                    |
 |                    | `max_tool_iterations`  | Max tool execution cycles           | `20`                     |
+| `tools`            | `restrict_to_workspace`| Sandbox file/shell operations       | `false`                  |
 | `tools.exec`       | `timeout`              | Command execution timeout (seconds) | `60`                     |
-|                    | `restrict_to_workspace`| Sandbox file operations             | `false`                  |
-| `channels.telegram`| `allow_from`           | Allowed usernames (empty = all)     | `[]`                     |
-| `sessions`         | `defaultId`            | Default session identifier          | `main`                   |
 
 ## Usage
 
@@ -285,17 +270,19 @@ The LLM receives properly formatted tool definitions and can call them with stru
 ## Workspace Structure
 
 ```
-~/.nanobot/workspace/
-├── AGENTS.md          # Agent personality and behavior
-├── SOUL.md            # Core values and principles
-├── USER.md            # User profile and preferences
-├── TOOLS.md           # Custom tool documentation
-├── IDENTITY.md        # Agent identity (name, vibe, emoji, avatar)
-├── memory/
-│   ├── MEMORY.md      # Long-term persistent memory
-│   └── YYYY-MM-DD.md  # Daily notes (auto-created)
-└── sessions/
-    └── *.jsonl        # Conversation history
+~/.nanobot/
+├── config.json            # Main configuration
+├── sessions/
+│   └── *.jsonl            # Conversation history
+└── workspace/
+    ├── AGENTS.md          # Agent personality and behavior
+    ├── SOUL.md            # Core values and principles
+    ├── USER.md            # User profile and preferences
+    ├── TOOLS.md           # Custom tool documentation
+    ├── IDENTITY.md        # Agent identity (name, vibe, emoji, avatar)
+    └── memory/
+        ├── MEMORY.md      # Long-term persistent memory
+        └── YYYY-MM-DD.md  # Daily notes (auto-created)
 ```
 
 ### Bootstrap Files
@@ -312,7 +299,7 @@ Bootstrap files in the workspace customize agent behavior:
 
 ### Access Control
 
-- Channel-level user whitelisting via `allow_from`
+- Channel-level user whitelisting via `allow_from` (for custom channel implementations)
 - Empty whitelist allows all users
 - Non-empty whitelist restricts to specified users
 
@@ -464,7 +451,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ### Areas for Contribution
 
-- Additional channel implementations (Discord, Slack, etc.)
+- Channel implementations (Telegram, Discord, Slack, etc.) using the `BaseChannel` interface
 - New tool development
 - Performance optimizations
 - Documentation improvements

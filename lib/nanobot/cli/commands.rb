@@ -266,11 +266,8 @@ module Nanobot
             - exec: Execute shell commands (with security restrictions)
 
             ## Web
-            - web_search: Search the web using Brave Search
+            - web_search: Search the web using Brave Search (requires API key)
             - web_fetch: Fetch and parse web pages
-
-            ## Communication
-            - message: Send messages to channels
           CONTENT
           'IDENTITY.md' => <<~CONTENT
             # Agent Identity
