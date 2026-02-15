@@ -33,11 +33,16 @@ module Nanobot
           end
         end
 
+        SEARCH_OPEN_TIMEOUT = 10
+        SEARCH_READ_TIMEOUT = 15
+
         private
 
         def search(query, count)
           conn = Faraday.new(url: 'https://api.search.brave.com') do |f|
             f.request :url_encoded
+            f.options.open_timeout = SEARCH_OPEN_TIMEOUT
+            f.options.timeout = SEARCH_READ_TIMEOUT
             f.adapter Faraday.default_adapter
           end
 
