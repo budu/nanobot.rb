@@ -89,6 +89,7 @@ module Nanobot
           provider: provider,
           workspace: workspace,
           model: options[:model],
+          max_iterations: config.agents.defaults.max_tool_iterations,
           brave_api_key: config.tools.web.search.api_key,
           exec_config: { timeout: config.tools.exec.timeout },
           restrict_to_workspace: config.tools.restrict_to_workspace,
