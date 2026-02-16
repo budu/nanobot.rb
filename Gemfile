@@ -10,6 +10,13 @@ gem 'logger', '~> 1.5' # Logging
 gem 'nokogiri', '~> 1.15' # Web parsing
 gem 'ruby_llm' # LLM Integration
 gem 'thor', '~> 1.3' # CLI & Commands
+gem 'webrick', '~> 1.8' # HTTP Gateway channel
+
+# Optional channel dependencies (install as needed)
+gem 'discordrb', require: false
+gem 'mail', require: false
+gem 'slack-ruby-client', require: false
+gem 'telegram-bot-ruby', require: false
 
 # Development & Testing
 group :development, :test do

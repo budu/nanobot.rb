@@ -126,7 +126,59 @@ module Nanobot
       end
       # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
+      desc 'serve', 'Start nanobot as a multi-channel service'
+      method_option :debug, aliases: '-d', type: :boolean, default: false, desc: 'Enable verbose debug logging'
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      # Serve command orchestrates channel startup and agent loop
+      def serve
+        config = load_config
+        workspace = Pathname.new(config.agents.defaults.workspace).expand_path
+
+        unless workspace.exist?
+          puts "Workspace not found. Run 'nanobot onboard' first."
+          exit 1
+        end
+
+        logger = create_logger(config, options[:debug])
+        provider = create_provider(config, nil, logger: logger)
+
+        bus = Bus::MessageBus.new(logger: logger)
+        agent_loop = Agent::Loop.new(
+          bus: bus,
+          provider: provider,
+          workspace: workspace,
+          max_iterations: config.agents.defaults.max_tool_iterations,
+          brave_api_key: config.tools.web.search.api_key,
+          exec_config: { timeout: config.tools.exec.timeout },
+          restrict_to_workspace: config.tools.restrict_to_workspace,
+          logger: logger
+        )
+
+        require_relative '../channels/manager'
+        manager = Channels::Manager.new(config: config, bus: bus, logger: logger)
+        register_channels(manager, config, bus, logger)
+
+        manager.start_all
+
+        trap('INT') do
+          logger.info 'Received INT signal, shutting down...'
+          manager.stop_all
+          agent_loop.stop
+        end
+
+        trap('TERM') do
+          logger.info 'Received TERM signal, shutting down...'
+          manager.stop_all
+          agent_loop.stop
+        end
+
+        puts 'Nanobot service started. Press Ctrl+C to stop.'
+        agent_loop.run
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
       desc 'status', 'Show nanobot status and configuration'
+      # rubocop:disable Metrics/AbcSize
       # Status command displays comprehensive system information
       def status
         config_path = Config::Loader.get_config_path
@@ -141,10 +193,19 @@ module Nanobot
           puts "  Anthropic: #{config.providers.anthropic&.api_key ? 'configured' : 'not configured'}"
           puts "  OpenAI: #{config.providers.openai&.api_key ? 'configured' : 'not configured'}"
           puts "\nActive provider: #{config.provider}"
+
+          puts "\nChannels:"
+          channels = config.channels
+          puts "  Telegram: #{channels.telegram.enabled ? 'enabled' : 'disabled'}"
+          puts "  Discord: #{channels.discord.enabled ? 'enabled' : 'disabled'}"
+          puts "  Gateway: #{channels.gateway.enabled ? 'enabled' : 'disabled'}"
+          puts "  Slack: #{channels.slack.enabled ? 'enabled' : 'disabled'}"
+          puts "  Email: #{channels.email.enabled ? 'enabled' : 'disabled'}"
         else
           puts "Configuration not found. Run 'nanobot onboard' first."
         end
       end
+      # rubocop:enable Metrics/AbcSize
 
       desc 'version', 'Show nanobot version'
       def version
@@ -152,6 +213,66 @@ module Nanobot
       end
 
       private
+
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      # Channel registration requires checking each channel type individually
+      def register_channels(manager, config, bus, logger)
+        channels_config = config.channels
+
+        if channels_config.telegram.enabled
+          begin
+            require_relative '../channels/telegram'
+            manager.add_channel(Channels::Telegram.new(
+                                  name: 'telegram', config: channels_config.telegram, bus: bus, logger: logger
+                                ))
+          rescue LoadError => e
+            logger.error "Failed to load telegram channel: #{e.message}"
+          end
+        end
+
+        if channels_config.discord.enabled
+          begin
+            require_relative '../channels/discord'
+            manager.add_channel(Channels::Discord.new(
+                                  name: 'discord', config: channels_config.discord, bus: bus, logger: logger
+                                ))
+          rescue LoadError => e
+            logger.error "Failed to load discord channel: #{e.message}"
+          end
+        end
+
+        if channels_config.gateway.enabled
+          begin
+            require_relative '../channels/gateway'
+            manager.add_channel(Channels::Gateway.new(
+                                  name: 'gateway', config: channels_config.gateway, bus: bus, logger: logger
+                                ))
+          rescue LoadError => e
+            logger.error "Failed to load gateway channel: #{e.message}"
+          end
+        end
+
+        if channels_config.slack.enabled
+          begin
+            require_relative '../channels/slack'
+            manager.add_channel(Channels::Slack.new(
+                                  name: 'slack', config: channels_config.slack, bus: bus, logger: logger
+                                ))
+          rescue LoadError => e
+            logger.error "Failed to load slack channel: #{e.message}"
+          end
+        end
+
+        return unless channels_config.email.enabled
+
+        require_relative '../channels/email'
+        manager.add_channel(Channels::Email.new(
+                              name: 'email', config: channels_config.email, bus: bus, logger: logger
+                            ))
+      rescue LoadError => e
+        logger.error "Failed to load email channel: #{e.message}"
+      end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       def load_config
         unless Config::Loader.exists?

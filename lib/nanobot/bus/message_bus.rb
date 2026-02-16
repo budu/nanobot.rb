@@ -109,12 +109,13 @@ module Nanobot
           message = @outbound_queue.pop
           break unless message # nil is stop signal
 
-          dispatch_message(message)
+          begin
+            dispatch_message(message)
+          rescue StandardError => e
+            @logger.error "Error dispatching message: #{e.message}"
+            @logger.error e.backtrace.join("\n")
+          end
         end
-      rescue StandardError => e
-        @logger.error "Error in dispatch loop: #{e.message}"
-        @logger.error e.backtrace.join("\n")
-        @running = false
       end
 
       # Dispatch a single message to all subscribers for its channel

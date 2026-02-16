@@ -212,6 +212,53 @@ RSpec.describe Nanobot::Agent::Loop do
     end
   end
 
+  describe 'slash commands' do
+    it 'handles /new command by clearing session' do
+      # First, send a normal message to create session history
+      allow(provider).to receive(:chat).and_return(
+        Nanobot::Providers::LLMResponse.new(content: 'Hello!')
+      )
+      agent_loop.process_direct('Hello', channel: 'test', chat_id: 'slash_test')
+
+      # Now send /new
+      result = agent_loop.process_direct('/new', channel: 'test', chat_id: 'slash_test')
+      expect(result).to eq('New session started.')
+
+      # Verify session was cleared
+      sessions = agent_loop.instance_variable_get(:@sessions)
+      session = sessions.get_or_create('test:slash_test')
+      expect(session.message_count).to eq(0)
+
+      # Clean up
+      sessions.delete('test:slash_test')
+    end
+
+    it 'handles /help command' do
+      result = agent_loop.process_direct('/help')
+      expect(result).to include('Available commands:')
+      expect(result).to include('/new')
+      expect(result).to include('/help')
+    end
+
+    it 'does not call LLM for slash commands' do
+      agent_loop.process_direct('/help')
+      expect(provider).not_to have_received(:chat) if provider.respond_to?(:chat)
+    end
+
+    it 'passes non-slash messages to LLM' do
+      allow(provider).to receive(:chat).and_return(
+        Nanobot::Providers::LLMResponse.new(content: 'Response')
+      )
+      result = agent_loop.process_direct('Hello')
+      expect(result).to eq('Response')
+    end
+
+    it 'handles /new with whitespace' do
+      result = agent_loop.process_direct('  /new  ')
+      expect(result).to eq('New session started.')
+    end
+  end
+
   describe 'agent loop with tool calls' do
     it 'executes tool calls and continues loop' do
       tool_call = Nanobot::Providers::ToolCallRequest.new(

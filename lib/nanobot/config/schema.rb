@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Nanobot
-  module Config
+  module Config # rubocop:disable Metrics/ModuleLength
     # Configuration schema classes using plain Ruby hashes and structs
 
     # Provider configuration
@@ -90,20 +90,105 @@ module Nanobot
       end
     end
 
-    # Main configuration class
-    Config = Struct.new(:providers, :provider, :agents, :tools, keyword_init: true) do
+    # Telegram channel configuration
+    TelegramConfig = Struct.new(:enabled, :token, :allow_from, :proxy, keyword_init: true) do
+      def initialize(enabled: false, token: nil, allow_from: [], proxy: nil)
+        super
+      end
+    end
+
+    # Discord channel configuration
+    DiscordConfig = Struct.new(:enabled, :token, :allow_from, keyword_init: true) do
+      def initialize(enabled: false, token: nil, allow_from: [])
+        super
+      end
+    end
+
+    # HTTP Gateway channel configuration
+    GatewayConfig = Struct.new(:enabled, :host, :port, :auth_token, keyword_init: true) do
+      def initialize(enabled: false, host: '127.0.0.1', port: 18_790, auth_token: nil)
+        super
+      end
+    end
+
+    # Slack DM policy configuration
+    SlackDMConfig = Struct.new(:enabled, :policy, :allow_from, keyword_init: true) do
+      def initialize(enabled: true, policy: 'open', allow_from: [])
+        super
+      end
+    end
+
+    # Slack channel configuration
+    SlackConfig = Struct.new(
+      :enabled, :bot_token, :app_token, :group_policy,
+      :group_allow_from, :dm, keyword_init: true
+    ) do
       def initialize(
+        enabled: false, bot_token: nil, app_token: nil,
+        group_policy: 'mention', group_allow_from: [], dm: {}
+      )
+        dm_config = dm.is_a?(Hash) ? dm : {}
+        super(
+          enabled: enabled, bot_token: bot_token, app_token: app_token,
+          group_policy: group_policy, group_allow_from: group_allow_from,
+          dm: SlackDMConfig.new(**dm_config)
+        )
+      end
+    end
+
+    # Email channel configuration
+    EmailConfig = Struct.new(
+      :enabled, :consent_granted,
+      :imap_host, :imap_port, :imap_username, :imap_password,
+      :imap_mailbox, :imap_use_ssl,
+      :smtp_host, :smtp_port, :smtp_username, :smtp_password,
+      :smtp_use_tls, :smtp_use_ssl, :from_address,
+      :auto_reply_enabled, :poll_interval_seconds, :mark_seen,
+      :max_body_chars, :subject_prefix, :allow_from,
+      keyword_init: true
+    ) do
+      def initialize(
+        enabled: false, consent_granted: false,
+        imap_host: nil, imap_port: 993, imap_username: nil, imap_password: nil,
+        imap_mailbox: 'INBOX', imap_use_ssl: true,
+        smtp_host: nil, smtp_port: 587, smtp_username: nil, smtp_password: nil,
+        smtp_use_tls: true, smtp_use_ssl: false, from_address: nil,
+        auto_reply_enabled: true, poll_interval_seconds: 30, mark_seen: true,
+        max_body_chars: 12_000, subject_prefix: 'Re: ', allow_from: []
+      )
+        super
+      end
+    end
+    # All channels configuration
+    ChannelsConfig = Struct.new(:telegram, :discord, :gateway, :slack, :email, keyword_init: true) do
+      def initialize(telegram: {}, discord: {}, gateway: {}, slack: {}, email: {})
+        super(
+          telegram: TelegramConfig.new(**(telegram.is_a?(Hash) ? telegram : {})),
+          discord: DiscordConfig.new(**(discord.is_a?(Hash) ? discord : {})),
+          gateway: GatewayConfig.new(**(gateway.is_a?(Hash) ? gateway : {})),
+          slack: SlackConfig.new(**(slack.is_a?(Hash) ? slack : {})),
+          email: EmailConfig.new(**(email.is_a?(Hash) ? email : {}))
+        )
+      end
+    end
+
+    # Main configuration class
+    Config = Struct.new(:providers, :provider, :agents, :tools, :channels, keyword_init: true) do
+      def initialize( # rubocop:disable Metrics/ParameterLists
         providers: {},
         provider: 'anthropic',
         agents: {},
         tools: {},
+        channels: {},
         **_rest
       )
+        channels_config = channels.is_a?(Hash) ? channels : {}
         super(
           providers: ProvidersConfig.new(**providers),
           provider: provider.to_s,
           agents: AgentsConfig.new(**agents),
-          tools: ToolsConfig.new(**tools)
+          tools: ToolsConfig.new(**tools),
+          channels: ChannelsConfig.new(**channels_config)
         )
       end
 

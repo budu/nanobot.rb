@@ -62,7 +62,8 @@ module Nanobot
       # @param chat_id [String] chat identifier
       # @param content [String] message content
       # @param media [Array] optional media attachments
-      def handle_message(sender_id:, chat_id:, content:, media: [])
+      # @param metadata [Hash] optional channel-specific metadata
+      def handle_message(sender_id:, chat_id:, content:, media: [], metadata: {})
         # Check access control
         unless allowed?(sender_id)
           @logger.warn "Access denied for #{sender_id} on channel #{@name}"
@@ -75,7 +76,8 @@ module Nanobot
           sender_id: sender_id,
           chat_id: chat_id,
           content: content,
-          media: media
+          media: media,
+          metadata: metadata
         )
 
         # Publish to bus

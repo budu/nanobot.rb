@@ -68,6 +68,40 @@ RSpec.describe Nanobot::CLI::Commands do
         expect(output).to include("Configuration not found. Run 'nanobot onboard' first.")
       end
     end
+
+    context 'when config has channels' do
+      it 'outputs channel status' do
+        config = Nanobot::Config::Config.new(
+          providers: {
+            anthropic: { api_key: 'test-key' }
+          },
+          provider: 'anthropic',
+          agents: {
+            defaults: {
+              model: 'claude-haiku-4-5',
+              workspace: '~/.nanobot/workspace'
+            }
+          },
+          channels: {
+            telegram: { enabled: true, token: 'tok' },
+            discord: { enabled: false }
+          }
+        )
+        config_path = Pathname.new('/tmp/test_config.json')
+
+        allow(config_path).to receive(:exist?).and_return(true)
+        allow(Nanobot::Config::Loader).to receive_messages(get_config_path: config_path, load: config)
+
+        output = capture_stdout { cli.status }
+
+        expect(output).to include('Channels:')
+        expect(output).to include('Telegram: enabled')
+        expect(output).to include('Discord: disabled')
+        expect(output).to include('Gateway: disabled')
+        expect(output).to include('Slack: disabled')
+        expect(output).to include('Email: disabled')
+      end
+    end
   end
 
   describe '#onboard' do
@@ -148,6 +182,32 @@ RSpec.describe Nanobot::CLI::Commands do
           expect(output).to include("Created configuration at #{config_path}")
           expect(output).to include('Setup complete!')
         end
+      end
+    end
+  end
+
+  describe '#serve' do
+    context 'when workspace does not exist' do
+      it 'tells user to run onboard first' do
+        config = Nanobot::Config::Config.new(
+          providers: {
+            anthropic: { api_key: 'real-key-here' }
+          },
+          provider: 'anthropic',
+          agents: {
+            defaults: {
+              workspace: '/nonexistent/workspace'
+            }
+          }
+        )
+
+        allow(Nanobot::Config::Loader).to receive_messages(exists?: true, load: config)
+
+        output = capture_stdout do
+          expect { cli.serve }.to raise_error(SystemExit)
+        end
+
+        expect(output).to include("Workspace not found. Run 'nanobot onboard' first.")
       end
     end
   end

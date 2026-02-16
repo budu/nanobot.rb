@@ -93,12 +93,15 @@ module Nanobot
 
         # Convert config to hash for JSON serialization
         def config_to_hash(config)
-          {
+          hash = {
             providers: providers_to_hash(config.providers),
             provider: config.provider,
             agents: agents_to_hash(config.agents),
             tools: tools_to_hash(config.tools)
           }
+          channels = channels_to_hash(config.channels)
+          hash[:channels] = channels unless channels.empty?
+          hash
         end
 
         def providers_to_hash(providers)
@@ -140,6 +143,55 @@ module Nanobot
             },
             restrict_to_workspace: tools.restrict_to_workspace
           }
+        end
+
+        def channels_to_hash(channels)
+          return {} unless channels
+
+          hash = {}
+          hash[:telegram] = telegram_to_hash(channels.telegram)
+          hash[:discord] = discord_to_hash(channels.discord)
+          hash[:gateway] = gateway_to_hash(channels.gateway)
+          hash[:slack] = slack_to_hash(channels.slack)
+          hash[:email] = email_to_hash(channels.email)
+          hash.compact
+        end
+
+        def telegram_to_hash(telegram)
+          return unless telegram&.enabled
+
+          { enabled: telegram.enabled, token: telegram.token,
+            allow_from: telegram.allow_from, proxy: telegram.proxy }.compact
+        end
+
+        def discord_to_hash(discord)
+          return unless discord&.enabled
+
+          { enabled: discord.enabled, token: discord.token,
+            allow_from: discord.allow_from }.compact
+        end
+
+        def gateway_to_hash(gateway)
+          return unless gateway&.enabled
+
+          { enabled: gateway.enabled, host: gateway.host,
+            port: gateway.port, auth_token: gateway.auth_token }.compact
+        end
+
+        def slack_to_hash(slack)
+          return unless slack&.enabled
+
+          { enabled: slack.enabled, bot_token: slack.bot_token,
+            app_token: slack.app_token, group_policy: slack.group_policy,
+            group_allow_from: slack.group_allow_from,
+            dm: { enabled: slack.dm.enabled, policy: slack.dm.policy,
+                  allow_from: slack.dm.allow_from } }.compact
+        end
+
+        def email_to_hash(email)
+          return unless email&.enabled
+
+          email.to_h.compact
         end
       end
     end

@@ -54,6 +54,11 @@ RSpec.describe Nanobot::Channels::Manager do
       manager.add_channel(channel)
     end
 
+    after do
+      # Kill any supervision threads still running from this test
+      manager.instance_variable_get(:@threads).each { |t| t.kill if t.alive? }
+    end
+
     it 'subscribes to outbound messages for each channel' do
       manager.start_all
       expect(bus).to have_received(:subscribe_outbound).with('test_channel')
@@ -78,13 +83,13 @@ RSpec.describe Nanobot::Channels::Manager do
       allow(channel).to receive(:start).and_raise(StandardError.new('Start error'))
       allow(channel).to receive(:stop)
       allow(bus).to receive(:stop) # Add this mock
-      allow(logger).to receive(:error)
+      allow(logger).to receive(:warn)
 
       manager.start_all
       sleep 0.1
       manager.stop_all
 
-      expect(logger).to have_received(:error).with(match(/Start error/))
+      expect(logger).to have_received(:warn).with(match(/Start error/)).at_least(:once)
     end
 
     it 'handles send errors in outbound subscription' do
@@ -166,6 +171,55 @@ RSpec.describe Nanobot::Channels::Manager do
       threads.each do |t|
         expect(t).not_to be_alive
       end
+    end
+  end
+
+  describe 'channel supervision' do
+    it 'restarts crashed channel' do
+      call_count = 0
+      channel = instance_double(Nanobot::Channels::BaseChannel, name: 'crashing')
+      allow(channel).to receive(:start) do
+        call_count += 1
+        raise StandardError, 'crash' if call_count <= 1
+      end
+      allow(channel).to receive(:stop)
+      allow(bus).to receive(:subscribe_outbound)
+      allow(bus).to receive(:start_dispatch)
+      allow(bus).to receive(:stop)
+
+      manager.add_channel(channel)
+      manager.start_all
+      sleep 6 # Wait for backoff + restart (5s for first restart)
+      manager.stop_all
+
+      expect(call_count).to be >= 2
+    end
+
+    it 'gives up after max_restarts' do
+      call_count = 0
+      channel = instance_double(Nanobot::Channels::BaseChannel, name: 'always_crashing')
+      allow(channel).to receive(:start) do
+        call_count += 1
+        raise StandardError, 'crash'
+      end
+      allow(channel).to receive(:stop)
+      allow(bus).to receive(:subscribe_outbound)
+      allow(bus).to receive(:start_dispatch)
+      allow(bus).to receive(:stop)
+      allow(logger).to receive(:error)
+
+      manager.add_channel(channel)
+      manager.start_all
+      # max_restarts=3, delays: 5+10+15=30s, but thread will hit all restarts
+      # We need to wait long enough for 3 restarts with backoff
+      # Instead of waiting 30+ seconds, we verify the thread eventually terminates
+      threads = manager.instance_variable_get(:@threads)
+      threads.each { |t| t.join(35) }
+      manager.stop_all
+
+      # 1 initial + 3 restarts = 4 calls total, then gives up
+      expect(call_count).to eq(4)
+      expect(logger).to have_received(:error).with(match(/exceeded max restarts/))
     end
   end
 

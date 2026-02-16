@@ -54,6 +54,30 @@ RSpec.describe Nanobot::Bus::MessageBus do
     end
   end
 
+  describe 'dispatch resilience' do
+    it 'continues dispatching after subscriber error' do
+      received = []
+
+      bus.subscribe_outbound('test') do |msg|
+        raise 'subscriber error' if msg.content == 'bad'
+
+        received << msg
+      end
+
+      bus.start_dispatch
+
+      bus.publish_outbound(Nanobot::Bus::OutboundMessage.new(channel: 'test', chat_id: '1', content: 'bad'))
+      bus.publish_outbound(Nanobot::Bus::OutboundMessage.new(channel: 'test', chat_id: '1', content: 'good'))
+
+      sleep 0.2
+
+      expect(received.length).to eq(1)
+      expect(received.first.content).to eq('good')
+
+      bus.stop
+    end
+  end
+
   describe '#queue_sizes' do
     it 'reports queue sizes' do
       message = Nanobot::Bus::InboundMessage.new(

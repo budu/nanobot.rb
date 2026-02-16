@@ -34,14 +34,8 @@ module Nanobot
             @logger.error "Error sending message on #{name}: #{e.message}"
           end
 
-          # Start channel in separate thread
-          thread = Thread.new do
-            @logger.info "Starting channel: #{name}"
-            channel.start
-          rescue StandardError => e
-            @logger.error "Error in channel #{name}: #{e.message}"
-            @logger.error e.backtrace.join("\n")
-          end
+          # Start channel in separate thread with supervision
+          thread = start_channel_with_supervision(name, channel)
 
           @threads << thread
         end
@@ -91,6 +85,31 @@ module Nanobot
       # @return [Integer]
       def size
         @channels.size
+      end
+
+      private
+
+      def start_channel_with_supervision(name, channel, max_restarts: 3)
+        Thread.new do
+          restarts = 0
+          loop do
+            @logger.info "Starting channel: #{name}"
+            channel.start
+            break # clean exit
+          rescue StandardError => e
+            restarts += 1
+            if restarts <= max_restarts
+              delay = 5 * restarts
+              @logger.warn "Channel #{name} crashed (#{restarts}/#{max_restarts}), " \
+                           "restarting in #{delay}s: #{e.message}"
+              sleep delay
+            else
+              @logger.error "Channel #{name} exceeded max restarts, giving up: #{e.message}"
+              @logger.error e.backtrace&.join("\n")
+              break
+            end
+          end
+        end
       end
     end
   end

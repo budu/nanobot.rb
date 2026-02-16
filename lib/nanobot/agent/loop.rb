@@ -95,6 +95,10 @@ module Nanobot
       def process_message(msg)
         @logger.info "Processing message from #{msg.channel}:#{msg.chat_id}"
 
+        # Handle slash commands before LLM processing
+        slash_response = handle_slash_command(msg)
+        return slash_response if slash_response
+
         # Get or create session
         session = @sessions.get_or_create(msg.session_key)
 
@@ -228,6 +232,27 @@ module Nanobot
         "I've completed processing but reached the maximum iteration limit."
       end
       # rubocop:enable Metrics
+
+      def handle_slash_command(msg)
+        case msg.content.strip
+        when '/new'
+          session = @sessions.get_or_create(msg.session_key)
+          session.clear
+          @sessions.save(session)
+          Bus::OutboundMessage.new(channel: msg.channel, chat_id: msg.chat_id,
+                                   content: 'New session started.')
+        when '/help'
+          Bus::OutboundMessage.new(channel: msg.channel, chat_id: msg.chat_id,
+                                   content: help_text)
+        end
+      end
+
+      def help_text
+        "Available commands:\n  " \
+          "/new  - Start a new conversation session\n  " \
+          "/help - Show this help message\n\n" \
+          'Send any other message to chat with the AI assistant.'
+      end
 
       # Register default tools (RubyLLM-compatible)
       def register_default_tools
