@@ -11,29 +11,16 @@ module Nanobot
     class Loop
       attr_reader :bus, :provider, :workspace, :logger
 
-      # rubocop:disable Metrics/ParameterLists
-      # Agent loop requires multiple configuration parameters
-      def initialize(
-        bus:,
-        provider:,
-        workspace:,
-        model: nil,
-        max_iterations: 20,
-        brave_api_key: nil,
-        exec_config: {},
-        restrict_to_workspace: false,
-        confirm_tool_call: nil,
-        logger: nil
-      )
+      def initialize(bus:, provider:, workspace:, logger: nil, **opts)
         @bus = bus
         @provider = provider
         @workspace = Pathname.new(workspace).expand_path
-        @model = model || provider.default_model
-        @max_iterations = max_iterations
-        @brave_api_key = brave_api_key
-        @exec_config = exec_config
-        @restrict_to_workspace = restrict_to_workspace
-        @confirm_tool_call = confirm_tool_call
+        @model = opts[:model] || provider.default_model
+        @max_iterations = opts[:max_iterations] || 20
+        @brave_api_key = opts[:brave_api_key]
+        @exec_config = opts[:exec_config] || {}
+        @restrict_to_workspace = opts[:restrict_to_workspace] || false
+        @confirm_tool_call = opts[:confirm_tool_call]
         @logger = logger || Logger.new(IO::NULL)
 
         @context = ContextBuilder.new(@workspace, logger: @logger)
@@ -42,7 +29,6 @@ module Nanobot
 
         register_default_tools
       end
-      # rubocop:enable Metrics/ParameterLists
 
       # Start the agent loop (consumes from bus)
       def run
@@ -139,9 +125,7 @@ module Nanobot
 
       private
 
-      # Main agent loop: LLM → Tool Calls → Execute → Loop
-      # rubocop:disable Metrics
-      # Core agent loop logic requires this complexity for orchestration
+      # Main agent loop: LLM -> Tool Calls -> Execute -> Loop
       def agent_loop(messages, session: nil)
         iteration = 0
 
@@ -150,88 +134,67 @@ module Nanobot
           @logger.debug "--- Agent loop iteration #{iteration}/#{@max_iterations} ---"
           @logger.debug "Message history size: #{messages.length} messages"
 
-          response = @provider.chat(
-            messages: messages,
-            tools: @tool_instances,
-            model: @model
-          )
+          response = @provider.chat(messages: messages, tools: @tool_instances, model: @model)
 
-          # Handle LLM API errors
           if response.finish_reason == 'error'
             @logger.error "LLM API error: #{response.content}"
             return "[LLM Error] #{response.content}"
           end
 
-          # Check for tool calls
-          if response.tool_calls?
-            @logger.debug "Got #{response.tool_calls.length} tool call(s), assistant content: #{response.content}"
-
-            # Add assistant message with tool calls
-            tool_calls_payload = response.tool_calls.map do |tc|
-              {
-                id: tc.id,
-                type: 'function',
-                function: {
-                  name: tc.name,
-                  arguments: JSON.generate(tc.arguments)
-                }
-              }
-            end
-
-            assistant_msg = {
-              role: 'assistant',
-              content: response.content || '',
-              tool_calls: tool_calls_payload
-            }
-            messages << assistant_msg
-            session&.add_message('assistant', response.content || '', tool_calls: tool_calls_payload)
-
-            # Execute tools and add results
-            response.tool_calls.each do |tool_call|
-              @logger.debug "Executing tool: #{tool_call.name} id=#{tool_call.id}"
-              @logger.debug "  Arguments: #{tool_call.arguments}"
-
-              # Check user confirmation callback before executing
-              if @confirm_tool_call && !@confirm_tool_call.call(tool_call.name, tool_call.arguments)
-                result_str = 'Error: Tool execution was denied by user.'
-              else
-                # Find the matching RubyLLM tool instance
-                tool = @tool_instances.find { |t| t.name == tool_call.name }
-
-                if tool
-                  # Execute using RubyLLM tool's call method
-                  result = tool.call(tool_call.arguments)
-                  result_str = result.is_a?(String) ? result : result.to_s
-                else
-                  result_str = "Error: Tool '#{tool_call.name}' not found"
-                end
-              end
-
-              @logger.debug "  Result (#{result_str.length} chars): #{result_str.slice(0, 1000)}"
-              @logger.debug '  (truncated)' if result_str.length > 1000
-
-              tool_msg = {
-                role: 'tool',
-                tool_call_id: tool_call.id,
-                name: tool_call.name,
-                content: result_str
-              }
-              messages << tool_msg
-              session&.add_message('tool', result_str)
-            end
-          else
-            # No tool calls - we're done
+          unless response.tool_calls?
             @logger.debug "No tool calls, agent loop complete after #{iteration} iteration(s)"
-            @logger.debug "Final response: #{response.content}"
             return response.content || "I've completed processing."
           end
+
+          process_tool_calls(response, messages, session)
         end
 
-        # Max iterations reached
         @logger.warn "Max iterations (#{@max_iterations}) reached"
         "I've completed processing but reached the maximum iteration limit."
       end
-      # rubocop:enable Metrics
+
+      def process_tool_calls(response, messages, session)
+        @logger.debug "Got #{response.tool_calls.length} tool call(s)"
+
+        payload = serialize_tool_calls(response.tool_calls)
+        assistant_msg = { role: 'assistant', content: response.content || '', tool_calls: payload }
+        messages << assistant_msg
+        session&.add_message('assistant', response.content || '', tool_calls: payload)
+
+        response.tool_calls.each do |tool_call|
+          result_str = execute_tool_call(tool_call)
+          messages << { role: 'tool', tool_call_id: tool_call.id, name: tool_call.name, content: result_str }
+          session&.add_message('tool', result_str)
+        end
+      end
+
+      def serialize_tool_calls(tool_calls)
+        tool_calls.map do |tc|
+          { id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.generate(tc.arguments) } }
+        end
+      end
+
+      def execute_tool_call(tool_call)
+        @logger.debug "Executing tool: #{tool_call.name} id=#{tool_call.id}"
+        @logger.debug "  Arguments: #{tool_call.arguments}"
+
+        result_str = if @confirm_tool_call && !@confirm_tool_call.call(tool_call.name, tool_call.arguments)
+                       'Error: Tool execution was denied by user.'
+                     else
+                       run_tool(tool_call)
+                     end
+
+        @logger.debug "  Result (#{result_str.length} chars): #{result_str.slice(0, 1000)}"
+        result_str
+      end
+
+      def run_tool(tool_call)
+        tool = @tool_instances.find { |t| t.name == tool_call.name }
+        return "Error: Tool '#{tool_call.name}' not found" unless tool
+
+        result = tool.call(tool_call.arguments)
+        result.is_a?(String) ? result : result.to_s
+      end
 
       def handle_slash_command(msg)
         case msg.content.strip

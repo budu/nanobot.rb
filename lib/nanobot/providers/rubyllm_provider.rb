@@ -31,49 +31,37 @@ module Nanobot
       # @param max_tokens [Integer] max tokens (not used currently)
       # @param temperature [Float] sampling temperature
       # @return [LLMResponse] response with content and tool calls
-      # rubocop:disable Metrics/MethodLength
       def chat(messages:, tools: nil, model: nil, max_tokens: 4096, temperature: 0.7)
         model_to_use = model || @default_model
-
         log_request(model_to_use, temperature, max_tokens, messages, tools)
 
-        begin
-          model_obj, provider = RubyLLM::Models.resolve(model_to_use, config: RubyLLM.config)
-          ruby_llm_messages = build_rubyllm_messages(messages)
-          tools_hash = build_tools_hash(tools)
+        response = call_provider(model_to_use, messages, tools, temperature)
+        log_response(response)
 
-          response = provider.complete(
-            ruby_llm_messages,
-            tools: tools_hash,
-            temperature: temperature,
-            model: model_obj,
-            params: {},
-            headers: {},
-            schema: nil,
-            thinking: nil
-          )
+        LLMResponse.new(content: response.content, tool_calls: convert_tool_calls(response), finish_reason: 'stop')
+      rescue StandardError => e
+        @logger.error "Error calling LLM: #{e.message}"
+        @logger.error e.backtrace.join("\n")
 
-          log_response(response)
-
-          LLMResponse.new(
-            content: response.content,
-            tool_calls: convert_tool_calls(response),
-            finish_reason: 'stop'
-          )
-        rescue StandardError => e
-          @logger.error "Error calling LLM: #{e.message}"
-          @logger.error e.backtrace.join("\n")
-
-          LLMResponse.new(
-            content: "Error calling LLM: #{e.message}",
-            tool_calls: [],
-            finish_reason: 'error'
-          )
-        end
+        LLMResponse.new(content: "Error calling LLM: #{e.message}", tool_calls: [], finish_reason: 'error')
       end
-      # rubocop:enable Metrics/MethodLength
 
       private
+
+      def call_provider(model_id, messages, tools, temperature)
+        model_obj, provider = RubyLLM::Models.resolve(model_id, config: RubyLLM.config)
+
+        provider.complete(
+          build_rubyllm_messages(messages),
+          tools: build_tools_hash(tools),
+          temperature: temperature,
+          model: model_obj,
+          params: {},
+          headers: {},
+          schema: nil,
+          thinking: nil
+        )
+      end
 
       def log_request(model, temperature, max_tokens, messages, tools)
         @logger.debug '=== LLM REQUEST ==='

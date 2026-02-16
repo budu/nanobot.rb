@@ -17,37 +17,260 @@ module Nanobot
       end
 
       desc 'onboard', 'Initialize nanobot configuration and workspace'
-      # rubocop:disable Metrics/AbcSize
       def onboard
         config_path = Config::Loader.get_config_path
+        config = load_or_create_config(config_path)
 
-        if config_path.exist?
-          config = Config::Loader.load
-          puts "Configuration already exists at #{config_path}"
-          print 'Overwrite config.json? (y/N): '
-          answer = $stdin.gets.chomp.downcase
-          if answer == 'y'
-            config = Config::Loader.create_default
-            puts "Created configuration at #{config_path}"
-          end
+        workspace = Pathname.new(config.agents.defaults.workspace).expand_path
+        setup_workspace(workspace)
+        create_bootstrap_files(workspace)
+
+        print_onboard_instructions(config_path, workspace)
+      end
+
+      desc 'agent', 'Run agent in interactive or single-message mode'
+      method_option :message, aliases: '-m', type: :string, desc: 'Single message to process'
+      method_option :model, type: :string, desc: 'Model to use (overrides config)'
+      method_option :debug, aliases: '-d', type: :boolean, default: false, desc: 'Enable verbose debug logging'
+      def agent
+        agent_loop = build_agent_loop(model: options[:model], debug: options[:debug])
+
+        if options[:message]
+          run_single_message(agent_loop, options[:message])
         else
-          config = Config::Loader.create_default
-          puts "Created configuration at #{config_path}"
+          run_interactive(agent_loop)
+        end
+      end
+
+      desc 'serve', 'Start nanobot as a multi-channel service'
+      method_option :debug, aliases: '-d', type: :boolean, default: false, desc: 'Enable verbose debug logging'
+      def serve
+        config, bus, logger = load_runtime(debug: options[:debug])
+        agent_loop = build_agent_loop_from(config, bus, logger)
+
+        require_relative '../channels/manager'
+        manager = Channels::Manager.new(config: config, bus: bus, logger: logger)
+        register_channels(manager, config, bus, logger)
+        manager.start_all
+
+        setup_signal_traps(manager, agent_loop, logger)
+
+        puts 'Nanobot service started. Press Ctrl+C to stop.'
+        agent_loop.run
+      end
+
+      desc 'status', 'Show nanobot status and configuration'
+      def status
+        config_path = Config::Loader.get_config_path
+
+        unless config_path.exist?
+          puts "Configuration not found. Run 'nanobot onboard' first."
+          return
         end
 
-        # Create workspace
+        config = Config::Loader.load
+        print_status(config, config_path)
+      end
+
+      desc 'version', 'Show nanobot version'
+      def version
+        puts "Nanobot version #{Nanobot::VERSION}"
+      end
+
+      CHANNEL_TYPES = {
+        telegram: 'Telegram',
+        discord: 'Discord',
+        gateway: 'Gateway',
+        slack: 'Slack',
+        email: 'Email'
+      }.freeze
+
+      PROVIDER_NAMES = { 'openrouter' => 'OpenRouter', 'anthropic' => 'Anthropic', 'openai' => 'OpenAI' }.freeze
+
+      BOOTSTRAP_FILES = {
+        'AGENTS.md' => <<~CONTENT,
+          # Agent Instructions
+
+          You are Nanobot, a helpful AI assistant.
+
+          ## Your Capabilities
+          - Read and write files
+          - Execute shell commands
+          - Search the web
+          - Fetch and parse web pages
+          - Manage your own memory
+
+          ## Guidelines
+          - Be helpful and concise
+          - Ask clarifying questions when needed
+          - Use tools proactively to accomplish tasks
+          - Save important information to memory
+        CONTENT
+        'SOUL.md' => <<~CONTENT,
+          # Agent Values
+
+          ## Core Principles
+          - Helpfulness: Always strive to assist the user
+          - Honesty: Be truthful and transparent
+          - Safety: Avoid harmful actions
+          - Respect: Treat users with respect
+        CONTENT
+        'USER.md' => <<~CONTENT,
+          # User Profile
+
+          ## Preferences
+          (Add your preferences here)
+
+          ## Context
+          (Add relevant context about yourself here)
+        CONTENT
+        'TOOLS.md' => <<~CONTENT,
+          # Available Tools
+
+          ## File Operations
+          - read_file: Read file contents
+          - write_file: Write to a file
+          - edit_file: Edit a file by replacing text
+          - list_dir: List directory contents
+
+          ## System
+          - exec: Execute shell commands (with security restrictions)
+
+          ## Web
+          - web_search: Search the web using Brave Search (requires API key)
+          - web_fetch: Fetch and parse web pages
+        CONTENT
+        'IDENTITY.md' => <<~CONTENT
+          # Agent Identity
+
+          - Name: Nanobot
+          - Creature: AI
+          - Vibe: warm
+          - Emoji: 🤖
+          - Avatar: (workspace-relative path, URL, or data URI)
+        CONTENT
+      }.freeze
+
+      private
+
+      def register_channels(manager, config, bus, logger)
+        CHANNEL_TYPES.each do |key, class_name|
+          channel_config = config.channels.send(key)
+          next unless channel_config.enabled
+
+          require_relative "../channels/#{key}"
+          klass = Channels.const_get(class_name)
+          manager.add_channel(klass.new(name: key.to_s, config: channel_config, bus: bus, logger: logger))
+        rescue LoadError => e
+          logger.error "Failed to load #{key} channel: #{e.message}"
+        end
+      end
+
+      def load_runtime(debug: false)
+        config = load_config
+        logger = create_logger(config, debug)
+        bus = Bus::MessageBus.new(logger: logger)
+        [config, bus, logger]
+      end
+
+      def require_workspace!(config)
         workspace = Pathname.new(config.agents.defaults.workspace).expand_path
+        unless workspace.exist?
+          puts "Workspace not found. Run 'nanobot onboard' first."
+          exit 1
+        end
+        workspace
+      end
+
+      def build_agent_loop(model: nil, debug: false)
+        config, bus, logger = load_runtime(debug: debug)
+        provider = create_provider(config, model, logger: logger)
+        workspace = require_workspace!(config)
+
+        Agent::Loop.new(
+          bus: bus, provider: provider, workspace: workspace, model: model,
+          max_iterations: config.agents.defaults.max_tool_iterations,
+          brave_api_key: config.tools.web.search.api_key,
+          exec_config: { timeout: config.tools.exec.timeout },
+          restrict_to_workspace: config.tools.restrict_to_workspace,
+          logger: logger
+        )
+      end
+
+      def build_agent_loop_from(config, bus, logger)
+        provider = create_provider(config, nil, logger: logger)
+        workspace = require_workspace!(config)
+
+        Agent::Loop.new(
+          bus: bus, provider: provider, workspace: workspace,
+          max_iterations: config.agents.defaults.max_tool_iterations,
+          brave_api_key: config.tools.web.search.api_key,
+          exec_config: { timeout: config.tools.exec.timeout },
+          restrict_to_workspace: config.tools.restrict_to_workspace,
+          logger: logger
+        )
+      end
+
+      def run_single_message(agent_loop, message)
+        puts 'Processing message...'
+        response = agent_loop.process_direct(message)
+        puts "\nResponse:"
+        puts response
+      end
+
+      def run_interactive(agent_loop)
+        puts 'Nanobot Agent (interactive mode)'
+        puts "Type 'exit' or 'quit' to exit\n\n"
+
+        loop do
+          print '> '
+          input = $stdin.gets&.chomp
+          break if input.nil? || %w[exit quit].include?(input.downcase)
+          next if input.strip.empty?
+
+          begin
+            response = agent_loop.process_direct(input)
+            puts "\n#{response}\n\n"
+          rescue StandardError => e
+            puts "Error: #{e.message}"
+          end
+        end
+
+        puts "\nGoodbye!"
+      end
+
+      def setup_signal_traps(manager, agent_loop, logger)
+        %w[INT TERM].each do |signal|
+          trap(signal) do
+            logger.info "Received #{signal} signal, shutting down..."
+            manager.stop_all
+            agent_loop.stop
+          end
+        end
+      end
+
+      def load_or_create_config(config_path)
+        if config_path.exist?
+          puts "Configuration already exists at #{config_path}"
+          print 'Overwrite config.json? (y/N): '
+          return Config::Loader.load unless $stdin.gets.chomp.downcase == 'y'
+        end
+
+        config = Config::Loader.create_default
+        puts "Created configuration at #{config_path}"
+        config
+      end
+
+      def setup_workspace(workspace)
         workspace.mkpath unless workspace.exist?
         puts "Created workspace at #{workspace}"
 
-        # Create bootstrap files
-        create_bootstrap_files(workspace)
-
-        # Create memory directory
         memory_dir = workspace / 'memory'
         memory_dir.mkpath unless memory_dir.exist?
         puts "Created memory directory at #{memory_dir}"
+      end
 
+      def print_onboard_instructions(config_path, workspace)
         puts "\nSetup complete!"
         puts "\nNext steps:"
         puts "1. Edit #{config_path} and replace the placeholder API keys with your actual keys:"
@@ -58,221 +281,26 @@ module Nanobot
         puts "2. Customize workspace files in #{workspace}"
         puts "3. Run 'nanobot agent -m \"Hello\"' to test"
       end
-      # rubocop:enable Metrics/AbcSize
 
-      desc 'agent', 'Run agent in interactive or single-message mode'
-      method_option :message, aliases: '-m', type: :string, desc: 'Single message to process'
-      method_option :model, type: :string, desc: 'Model to use (overrides config)'
-      method_option :debug, aliases: '-d', type: :boolean, default: false, desc: 'Enable verbose debug logging'
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-      # Agent command orchestrates complex initialization and message processing
-      def agent
-        config = load_config
-        workspace = Pathname.new(config.agents.defaults.workspace).expand_path
+      def print_status(config, config_path)
+        puts "Configuration: #{config_path}"
+        puts "Workspace: #{config.agents.defaults.workspace}"
+        puts "Model: #{config.agents.defaults.model}"
 
-        # Ensure workspace exists
-        unless workspace.exist?
-          puts "Workspace not found. Run 'nanobot onboard' first."
-          exit 1
+        puts "\nProviders:"
+        PROVIDER_NAMES.each do |key, display_name|
+          provider = config.providers.send(key)
+          status = provider&.api_key ? 'configured' : 'not configured'
+          puts "  #{display_name}: #{status}"
         end
+        puts "\nActive provider: #{config.provider}"
 
-        # Set up logger with appropriate level
-        logger = create_logger(config, options[:debug])
-
-        # Create provider
-        provider = create_provider(config, options[:model], logger: logger)
-
-        # Create bus and agent
-        bus = Bus::MessageBus.new(logger: logger)
-        agent_loop = Agent::Loop.new(
-          bus: bus,
-          provider: provider,
-          workspace: workspace,
-          model: options[:model],
-          max_iterations: config.agents.defaults.max_tool_iterations,
-          brave_api_key: config.tools.web.search.api_key,
-          exec_config: { timeout: config.tools.exec.timeout },
-          restrict_to_workspace: config.tools.restrict_to_workspace,
-          logger: logger
-        )
-
-        if options[:message]
-          # Single message mode
-          puts 'Processing message...'
-          response = agent_loop.process_direct(options[:message])
-          puts "\nResponse:"
-          puts response
-        else
-          # Interactive mode
-          puts 'Nanobot Agent (interactive mode)'
-          puts "Type 'exit' or 'quit' to exit\n\n"
-
-          loop do
-            print '> '
-            input = $stdin.gets&.chomp
-            break if input.nil? || %w[exit quit].include?(input.downcase)
-            next if input.strip.empty?
-
-            begin
-              response = agent_loop.process_direct(input)
-              puts "\n#{response}\n\n"
-            rescue StandardError => e
-              puts "Error: #{e.message}"
-            end
-          end
-
-          puts "\nGoodbye!"
+        puts "\nChannels:"
+        CHANNEL_TYPES.each_key do |key|
+          channel = config.channels.send(key)
+          puts "  #{key.to_s.capitalize}: #{channel.enabled ? 'enabled' : 'disabled'}"
         end
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
-
-      desc 'serve', 'Start nanobot as a multi-channel service'
-      method_option :debug, aliases: '-d', type: :boolean, default: false, desc: 'Enable verbose debug logging'
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-      # Serve command orchestrates channel startup and agent loop
-      def serve
-        config = load_config
-        workspace = Pathname.new(config.agents.defaults.workspace).expand_path
-
-        unless workspace.exist?
-          puts "Workspace not found. Run 'nanobot onboard' first."
-          exit 1
-        end
-
-        logger = create_logger(config, options[:debug])
-        provider = create_provider(config, nil, logger: logger)
-
-        bus = Bus::MessageBus.new(logger: logger)
-        agent_loop = Agent::Loop.new(
-          bus: bus,
-          provider: provider,
-          workspace: workspace,
-          max_iterations: config.agents.defaults.max_tool_iterations,
-          brave_api_key: config.tools.web.search.api_key,
-          exec_config: { timeout: config.tools.exec.timeout },
-          restrict_to_workspace: config.tools.restrict_to_workspace,
-          logger: logger
-        )
-
-        require_relative '../channels/manager'
-        manager = Channels::Manager.new(config: config, bus: bus, logger: logger)
-        register_channels(manager, config, bus, logger)
-
-        manager.start_all
-
-        trap('INT') do
-          logger.info 'Received INT signal, shutting down...'
-          manager.stop_all
-          agent_loop.stop
-        end
-
-        trap('TERM') do
-          logger.info 'Received TERM signal, shutting down...'
-          manager.stop_all
-          agent_loop.stop
-        end
-
-        puts 'Nanobot service started. Press Ctrl+C to stop.'
-        agent_loop.run
-      end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
-
-      desc 'status', 'Show nanobot status and configuration'
-      # rubocop:disable Metrics/AbcSize
-      # Status command displays comprehensive system information
-      def status
-        config_path = Config::Loader.get_config_path
-
-        if config_path.exist?
-          config = Config::Loader.load
-          puts "Configuration: #{config_path}"
-          puts "Workspace: #{config.agents.defaults.workspace}"
-          puts "Model: #{config.agents.defaults.model}"
-          puts "\nProviders:"
-          puts "  OpenRouter: #{config.providers.openrouter&.api_key ? 'configured' : 'not configured'}"
-          puts "  Anthropic: #{config.providers.anthropic&.api_key ? 'configured' : 'not configured'}"
-          puts "  OpenAI: #{config.providers.openai&.api_key ? 'configured' : 'not configured'}"
-          puts "\nActive provider: #{config.provider}"
-
-          puts "\nChannels:"
-          channels = config.channels
-          puts "  Telegram: #{channels.telegram.enabled ? 'enabled' : 'disabled'}"
-          puts "  Discord: #{channels.discord.enabled ? 'enabled' : 'disabled'}"
-          puts "  Gateway: #{channels.gateway.enabled ? 'enabled' : 'disabled'}"
-          puts "  Slack: #{channels.slack.enabled ? 'enabled' : 'disabled'}"
-          puts "  Email: #{channels.email.enabled ? 'enabled' : 'disabled'}"
-        else
-          puts "Configuration not found. Run 'nanobot onboard' first."
-        end
-      end
-      # rubocop:enable Metrics/AbcSize
-
-      desc 'version', 'Show nanobot version'
-      def version
-        puts "Nanobot version #{Nanobot::VERSION}"
-      end
-
-      private
-
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-      # Channel registration requires checking each channel type individually
-      def register_channels(manager, config, bus, logger)
-        channels_config = config.channels
-
-        if channels_config.telegram.enabled
-          begin
-            require_relative '../channels/telegram'
-            manager.add_channel(Channels::Telegram.new(
-                                  name: 'telegram', config: channels_config.telegram, bus: bus, logger: logger
-                                ))
-          rescue LoadError => e
-            logger.error "Failed to load telegram channel: #{e.message}"
-          end
-        end
-
-        if channels_config.discord.enabled
-          begin
-            require_relative '../channels/discord'
-            manager.add_channel(Channels::Discord.new(
-                                  name: 'discord', config: channels_config.discord, bus: bus, logger: logger
-                                ))
-          rescue LoadError => e
-            logger.error "Failed to load discord channel: #{e.message}"
-          end
-        end
-
-        if channels_config.gateway.enabled
-          begin
-            require_relative '../channels/gateway'
-            manager.add_channel(Channels::Gateway.new(
-                                  name: 'gateway', config: channels_config.gateway, bus: bus, logger: logger
-                                ))
-          rescue LoadError => e
-            logger.error "Failed to load gateway channel: #{e.message}"
-          end
-        end
-
-        if channels_config.slack.enabled
-          begin
-            require_relative '../channels/slack'
-            manager.add_channel(Channels::Slack.new(
-                                  name: 'slack', config: channels_config.slack, bus: bus, logger: logger
-                                ))
-          rescue LoadError => e
-            logger.error "Failed to load slack channel: #{e.message}"
-          end
-        end
-
-        return unless channels_config.email.enabled
-
-        require_relative '../channels/email'
-        manager.add_channel(Channels::Email.new(
-                              name: 'email', config: channels_config.email, bus: bus, logger: logger
-                            ))
-      rescue LoadError => e
-        logger.error "Failed to load email channel: #{e.message}"
-      end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       def load_config
         unless Config::Loader.exists?
@@ -334,74 +362,8 @@ module Nanobot
         )
       end
 
-      # rubocop:disable Metrics/MethodLength
-      # Bootstrap files creation requires multiple file definitions
       def create_bootstrap_files(workspace)
-        files = {
-          'AGENTS.md' => <<~CONTENT,
-            # Agent Instructions
-
-            You are Nanobot, a helpful AI assistant.
-
-            ## Your Capabilities
-            - Read and write files
-            - Execute shell commands
-            - Search the web
-            - Fetch and parse web pages
-            - Manage your own memory
-
-            ## Guidelines
-            - Be helpful and concise
-            - Ask clarifying questions when needed
-            - Use tools proactively to accomplish tasks
-            - Save important information to memory
-          CONTENT
-          'SOUL.md' => <<~CONTENT,
-            # Agent Values
-
-            ## Core Principles
-            - Helpfulness: Always strive to assist the user
-            - Honesty: Be truthful and transparent
-            - Safety: Avoid harmful actions
-            - Respect: Treat users with respect
-          CONTENT
-          'USER.md' => <<~CONTENT,
-            # User Profile
-
-            ## Preferences
-            (Add your preferences here)
-
-            ## Context
-            (Add relevant context about yourself here)
-          CONTENT
-          'TOOLS.md' => <<~CONTENT,
-            # Available Tools
-
-            ## File Operations
-            - read_file: Read file contents
-            - write_file: Write to a file
-            - edit_file: Edit a file by replacing text
-            - list_dir: List directory contents
-
-            ## System
-            - exec: Execute shell commands (with security restrictions)
-
-            ## Web
-            - web_search: Search the web using Brave Search (requires API key)
-            - web_fetch: Fetch and parse web pages
-          CONTENT
-          'IDENTITY.md' => <<~CONTENT
-            # Agent Identity
-
-            - Name: Nanobot
-            - Creature: AI
-            - Vibe: warm
-            - Emoji: 🤖
-            - Avatar: (workspace-relative path, URL, or data URI)
-          CONTENT
-        }
-
-        files.each do |filename, content|
+        BOOTSTRAP_FILES.each do |filename, content|
           file_path = workspace / filename
           next if file_path.exist?
 
@@ -409,7 +371,6 @@ module Nanobot
           puts "Created #{file_path}"
         end
       end
-      # rubocop:enable Metrics/MethodLength
     end
     # rubocop:enable Metrics/ClassLength
   end

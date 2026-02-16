@@ -15,20 +15,17 @@ module Nanobot
       :metadata,
       keyword_init: true
     ) do
-      # rubocop:disable Metrics/ParameterLists
-      # Message structure requires all these parameters for complete context
-      def initialize(channel:, sender_id:, chat_id:, content:, timestamp: nil, media: nil, metadata: nil)
+      def initialize(channel:, sender_id:, chat_id:, content:, **opts)
         super(
           channel: channel,
           sender_id: sender_id,
           chat_id: chat_id,
           content: content,
-          timestamp: timestamp || Time.now,
-          media: media || [],
-          metadata: metadata || {}
+          timestamp: opts[:timestamp] || Time.now,
+          media: opts[:media] || [],
+          metadata: opts[:metadata] || {}
         )
       end
-      # rubocop:enable Metrics/ParameterLists
 
       def session_key
         "#{channel}:#{chat_id}"

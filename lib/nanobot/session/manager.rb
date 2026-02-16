@@ -119,7 +119,7 @@ module Nanobot
       # Delete a session
       # @param key [String] session key
       # @return [Boolean] true if deleted
-      def delete(key) # rubocop:disable Naming/PredicateMethod
+      def delete(key)
         @cache.delete(key)
         path = @sessions_dir / "#{safe_filename(key)}.jsonl"
 

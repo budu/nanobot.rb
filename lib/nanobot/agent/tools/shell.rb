@@ -127,7 +127,11 @@ module Nanobot
 
           [stdout_str, stderr_str, status]
         ensure
-          [stdout, stderr].each { |io| io&.close rescue nil } # rubocop:disable Style/RescueModifier
+          [stdout, stderr].each do |io|
+            io&.close
+          rescue StandardError # best-effort cleanup
+            nil
+          end
         end
 
         def kill_process_group(pid)

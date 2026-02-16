@@ -123,11 +123,17 @@ module Nanobot
             messages << item if item
           end
         ensure
-          imap.logout rescue nil # rubocop:disable Style/RescueModifier
-          imap.disconnect rescue nil # rubocop:disable Style/RescueModifier
+          disconnect_imap(imap)
         end
 
         messages
+      end
+
+      def disconnect_imap(imap)
+        imap.logout
+        imap.disconnect
+      rescue StandardError => e
+        @logger.debug "IMAP disconnect error (ignored): #{e.message}"
       end
 
       def process_uid(imap, uid)

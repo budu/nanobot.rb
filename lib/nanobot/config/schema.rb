@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Nanobot
-  module Config # rubocop:disable Metrics/ModuleLength
+  module Config
     # Configuration schema classes using plain Ruby hashes and structs
 
     # Provider configuration
@@ -174,14 +174,7 @@ module Nanobot
 
     # Main configuration class
     Config = Struct.new(:providers, :provider, :agents, :tools, :channels, keyword_init: true) do
-      def initialize( # rubocop:disable Metrics/ParameterLists
-        providers: {},
-        provider: 'anthropic',
-        agents: {},
-        tools: {},
-        channels: {},
-        **_rest
-      )
+      def initialize(providers: {}, provider: 'anthropic', agents: {}, tools: {}, channels: {}, **_rest)
         channels_config = channels.is_a?(Hash) ? channels : {}
         super(
           providers: ProvidersConfig.new(**providers),
