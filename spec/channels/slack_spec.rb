@@ -73,6 +73,53 @@ RSpec.describe Nanobot::Channels::Slack do
     ch
   end
 
+  describe '#start' do
+    let(:socket_client) { instance_double(Slack::RealTime::Client) }
+
+    before do
+      allow(web_client).to receive(:auth_test).and_return({ 'user_id' => 'U12345' })
+      allow(Slack::Web::Client).to receive(:new).and_return(web_client)
+      allow(Slack::RealTime::Client).to receive(:new).and_return(socket_client)
+      allow(socket_client).to receive(:on)
+      allow(socket_client).to receive(:start!)
+    end
+
+    it 'configures clients and starts socket mode' do
+      ch = described_class.new(name: 'slack', config: config, bus: bus, logger: logger)
+      ch.start
+
+      expect(Slack::Web::Client).to have_received(:new)
+      expect(Slack::RealTime::Client).to have_received(:new).with(token: 'xapp-test-token')
+      expect(socket_client).to have_received(:on).with(:message)
+      expect(socket_client).to have_received(:start!)
+    end
+
+    it 'resolves bot user id' do
+      ch = described_class.new(name: 'slack', config: config, bus: bus, logger: logger)
+      ch.start
+
+      expect(web_client).to have_received(:auth_test)
+    end
+
+    it 'sets running to true' do
+      ch = described_class.new(name: 'slack', config: config, bus: bus, logger: logger)
+      ch.start
+
+      expect(ch.running?).to be true
+    end
+
+    it 'handles auth_test failure gracefully' do
+      allow(web_client).to receive(:auth_test).and_raise(StandardError, 'auth failed')
+      allow(logger).to receive(:warn)
+
+      ch = described_class.new(name: 'slack', config: config, bus: bus, logger: logger)
+      ch.start
+
+      expect(logger).to have_received(:warn).with(match(/auth failed/))
+      expect(socket_client).to have_received(:start!)
+    end
+  end
+
   describe '#initialize' do
     it 'initializes with required parameters' do
       expect(channel.name).to eq('slack')

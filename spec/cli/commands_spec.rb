@@ -210,6 +210,31 @@ RSpec.describe Nanobot::CLI::Commands do
         expect(output).to include("Workspace not found. Run 'nanobot onboard' first.")
       end
     end
+
+    context 'when workspace exists' do
+      it 'starts manager, registers channels, and runs agent loop' do
+        Dir.mktmpdir do |tmpdir|
+          config = Nanobot::Config::Config.new(
+            providers: { anthropic: { api_key: 'real-key-here' } },
+            provider: 'anthropic',
+            agents: { defaults: { workspace: tmpdir } }
+          )
+
+          agent_loop = instance_double(Nanobot::Agent::Loop, run: nil, stop: nil)
+          manager = instance_double(Nanobot::Channels::Manager, start_all: nil, stop_all: nil)
+
+          allow(Nanobot::Config::Loader).to receive_messages(exists?: true, load: config)
+          allow(Nanobot::Agent::Loop).to receive(:new).and_return(agent_loop)
+          allow(Nanobot::Channels::Manager).to receive(:new).and_return(manager)
+
+          output = capture_stdout { cli.serve }
+
+          expect(output).to include('Nanobot service started')
+          expect(manager).to have_received(:start_all)
+          expect(agent_loop).to have_received(:run)
+        end
+      end
+    end
   end
 
   describe '#agent' do
@@ -234,6 +259,214 @@ RSpec.describe Nanobot::CLI::Commands do
         end
 
         expect(output).to include("Workspace not found. Run 'nanobot onboard' first.")
+      end
+    end
+
+    context 'when workspace exists' do
+      let(:tmpdir) { Dir.mktmpdir }
+      let(:agent_loop) { instance_double(Nanobot::Agent::Loop) }
+
+      before do
+        config = Nanobot::Config::Config.new(
+          providers: { anthropic: { api_key: 'real-key-here' } },
+          provider: 'anthropic',
+          agents: { defaults: { workspace: tmpdir } }
+        )
+        allow(Nanobot::Config::Loader).to receive_messages(exists?: true, load: config)
+        allow(Nanobot::Agent::Loop).to receive(:new).and_return(agent_loop)
+      end
+
+      after { FileUtils.rm_rf(tmpdir) }
+
+      it 'runs single message mode with -m flag' do
+        allow(agent_loop).to receive(:process_direct).and_return('Hello back!')
+
+        cli_with_msg = described_class.new([], { message: 'Hello' })
+
+        output = capture_stdout { cli_with_msg.agent }
+
+        expect(output).to include('Processing message...')
+        expect(output).to include('Hello back!')
+        expect(agent_loop).to have_received(:process_direct).with('Hello')
+      end
+
+      it 'runs interactive mode without -m flag' do
+        allow($stdin).to receive(:gets).and_return("hello\n", "exit\n")
+        allow(agent_loop).to receive(:process_direct).and_return('Hi!')
+
+        output = capture_stdout { cli.agent }
+
+        expect(output).to include('Nanobot Agent (interactive mode)')
+        expect(output).to include('Goodbye!')
+        expect(agent_loop).to have_received(:process_direct).with('hello')
+      end
+
+      it 'handles errors in interactive mode' do
+        allow($stdin).to receive(:gets).and_return("test\n", "exit\n")
+        allow(agent_loop).to receive(:process_direct).and_raise(StandardError, 'something broke')
+
+        output = capture_stdout { cli.agent }
+
+        expect(output).to include('Error: something broke')
+      end
+
+      it 'exits interactive mode on nil input (EOF)' do
+        allow($stdin).to receive(:gets).and_return(nil)
+        allow(agent_loop).to receive(:process_direct)
+
+        output = capture_stdout { cli.agent }
+
+        expect(output).to include('Goodbye!')
+      end
+
+      it 'skips empty input in interactive mode' do
+        allow($stdin).to receive(:gets).and_return("  \n", "quit\n")
+        allow(agent_loop).to receive(:process_direct)
+
+        capture_stdout { cli.agent }
+
+        expect(agent_loop).not_to have_received(:process_direct)
+      end
+    end
+  end
+
+  describe 'private helpers' do
+    describe '#create_logger' do
+      it 'sets debug level when debug flag is true' do
+        config = Nanobot::Config::Config.new
+        result = cli.send(:create_logger, config, true)
+        expect(result.level).to eq(Logger::DEBUG)
+      end
+
+      it 'sets level from config string' do
+        config = Nanobot::Config::Config.new(agents: { defaults: { log_level: 'warn' } })
+        result = cli.send(:create_logger, config, false)
+        expect(result.level).to eq(Logger::WARN)
+      end
+
+      it 'sets error level from config' do
+        config = Nanobot::Config::Config.new(agents: { defaults: { log_level: 'error' } })
+        result = cli.send(:create_logger, config, false)
+        expect(result.level).to eq(Logger::ERROR)
+      end
+
+      it 'defaults to info level' do
+        config = Nanobot::Config::Config.new(agents: { defaults: { log_level: 'info' } })
+        result = cli.send(:create_logger, config, false)
+        expect(result.level).to eq(Logger::INFO)
+      end
+
+      it 'formats log messages with severity prefix' do
+        config = Nanobot::Config::Config.new
+        result = cli.send(:create_logger, config, false)
+        formatted = result.formatter.call('INFO', Time.now, nil, 'test message')
+        expect(formatted).to eq("INFO: test message\n")
+      end
+    end
+
+    describe '#create_provider' do
+      it 'exits when no API key configured' do
+        config = Nanobot::Config::Config.new(
+          providers: { anthropic: {} },
+          provider: 'anthropic'
+        )
+
+        output = capture_stdout do
+          expect { cli.send(:create_provider, config) }.to raise_error(SystemExit)
+        end
+
+        expect(output).to include('No API key configured')
+      end
+
+      it 'exits when placeholder API key detected' do
+        config = Nanobot::Config::Config.new(
+          providers: { anthropic: { api_key: 'sk-ant-api03-...' } },
+          provider: 'anthropic'
+        )
+
+        output = capture_stdout do
+          expect { cli.send(:create_provider, config) }.to raise_error(SystemExit)
+        end
+
+        expect(output).to include('Placeholder API key detected')
+      end
+    end
+
+    describe '#load_config' do
+      it 'exits when config does not exist' do
+        allow(Nanobot::Config::Loader).to receive(:exists?).and_return(false)
+
+        output = capture_stdout do
+          expect { cli.send(:load_config) }.to raise_error(SystemExit)
+        end
+
+        expect(output).to include("Configuration not found. Run 'nanobot onboard' first.")
+      end
+    end
+
+    describe '#register_channels' do
+      it 'registers enabled channels' do
+        config = Nanobot::Config::Config.new(
+          channels: { telegram: { enabled: true, token: 'tok' } }
+        )
+        bus = instance_double(Nanobot::Bus::MessageBus)
+        logger = test_logger
+        manager = instance_double(Nanobot::Channels::Manager)
+        allow(manager).to receive(:add_channel)
+
+        cli.send(:register_channels, manager, config, bus, logger)
+
+        expect(manager).to have_received(:add_channel).once
+      end
+
+      it 'skips disabled channels' do
+        config = Nanobot::Config::Config.new(
+          channels: { telegram: { enabled: false } }
+        )
+        bus = instance_double(Nanobot::Bus::MessageBus)
+        logger = test_logger
+        manager = instance_double(Nanobot::Channels::Manager)
+        allow(manager).to receive(:add_channel)
+
+        cli.send(:register_channels, manager, config, bus, logger)
+
+        expect(manager).not_to have_received(:add_channel)
+      end
+
+      it 'handles LoadError for missing channel gems' do
+        config = Nanobot::Config::Config.new(
+          channels: { email: { enabled: true } }
+        )
+        bus = instance_double(Nanobot::Bus::MessageBus)
+        logger = test_logger
+        manager = instance_double(Nanobot::Channels::Manager)
+        allow(manager).to receive(:add_channel)
+        allow(logger).to receive(:error)
+
+        # Email requires net/imap which should be available, so we force LoadError
+        allow(cli).to receive(:require_relative).and_call_original
+        allow(cli).to receive(:require_relative).with('../channels/email').and_raise(LoadError, 'cannot load email')
+
+        cli.send(:register_channels, manager, config, bus, logger)
+
+        expect(logger).to have_received(:error).with(match(/Failed to load email channel/))
+      end
+    end
+
+    describe '#setup_signal_traps' do
+      it 'sets up INT and TERM signal traps' do
+        manager = instance_double(Nanobot::Channels::Manager)
+        agent_loop = instance_double(Nanobot::Agent::Loop)
+        logger = test_logger
+        allow(logger).to receive(:info)
+
+        traps = {}
+        allow(cli).to receive(:trap) { |signal, &block| traps[signal] = block }
+
+        cli.send(:setup_signal_traps, manager, agent_loop, logger)
+
+        expect(traps).to have_key('INT')
+        expect(traps).to have_key('TERM')
       end
     end
   end

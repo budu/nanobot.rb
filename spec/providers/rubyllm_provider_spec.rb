@@ -121,6 +121,100 @@ RSpec.describe Nanobot::Providers::RubyLLMProvider do
           described_class.new(api_key: 'sk-or-v1-test', provider: 'openrouter', logger: logger)
         end.not_to raise_error
       end
+
+      it 'falls back to OpenAI config for unknown provider' do
+        allow(logger).to receive(:warn)
+        allow(logger).to receive(:debug)
+
+        described_class.new(api_key: 'sk-test', provider: 'custom_llm', logger: logger)
+
+        expect(logger).to have_received(:warn).with(match(/Unknown provider 'custom_llm'/))
+      end
+    end
+
+    describe '#log_message' do
+      it 'logs system prompt content' do
+        allow(logger).to receive(:debug)
+
+        msg = { role: 'system', content: 'You are a helpful assistant' }
+        provider.send(:log_message, msg, 0)
+
+        expect(logger).to have_received(:debug).with(match(/system prompt.*You are a helpful assistant/))
+      end
+
+      it 'logs tool calls in messages' do
+        allow(logger).to receive(:debug)
+
+        msg = {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            { function: { name: 'read_file', arguments: '{"path":"/tmp"}' } }
+          ]
+        }
+        provider.send(:log_message, msg, 0)
+
+        expect(logger).to have_received(:debug).with(match(/tool_call: read_file/))
+      end
+    end
+
+    describe '#log_response' do
+      it 'logs tool calls from response' do
+        allow(logger).to receive(:debug)
+
+        tool_call = Struct.new(:id, :name, :arguments).new('call_1', 'exec', { command: 'ls' })
+        response = double('response',
+                          content: '',
+                          tool_call?: true,
+                          tool_calls: { 'call_1' => tool_call })
+
+        provider.send(:log_response, response)
+
+        expect(logger).to have_received(:debug).with(match(/tool_call id=call_1 name=exec/))
+      end
+    end
+
+    describe '#convert_tool_calls_to_rubyllm' do
+      it 'converts tool calls with string arguments' do
+        tool_calls = [
+          {
+            'id' => 'call_1',
+            'function' => { 'name' => 'read_file', 'arguments' => '{"path": "/tmp/test.rb"}' }
+          }
+        ]
+
+        result = provider.send(:convert_tool_calls_to_rubyllm, tool_calls)
+        expect(result).to be_a(Hash)
+        expect(result['call_1'].name).to eq('read_file')
+        expect(result['call_1'].arguments).to eq('path' => '/tmp/test.rb')
+      end
+
+      it 'converts tool calls with hash arguments' do
+        tool_calls = [
+          {
+            id: 'call_2',
+            function: { name: 'exec', arguments: { command: 'ls' } }
+          }
+        ]
+
+        result = provider.send(:convert_tool_calls_to_rubyllm, tool_calls)
+        expect(result['call_2'].name).to eq('exec')
+        expect(result['call_2'].arguments).to eq(command: 'ls')
+      end
+
+      it 'returns nil for empty tool calls' do
+        expect(provider.send(:convert_tool_calls_to_rubyllm, nil)).to be_nil
+        expect(provider.send(:convert_tool_calls_to_rubyllm, [])).to be_nil
+      end
+
+      it 'returns nil on JSON parse error' do
+        tool_calls = [
+          { 'id' => 'call_3', 'function' => { 'name' => 'test', 'arguments' => '{invalid json' } }
+        ]
+
+        result = provider.send(:convert_tool_calls_to_rubyllm, tool_calls)
+        expect(result).to be_nil
+      end
     end
 
     describe '#convert_tool_calls' do
