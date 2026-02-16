@@ -11,6 +11,17 @@ module Nanobot
     class Loop
       attr_reader :bus, :provider, :workspace, :logger
 
+      # @param bus [Bus::MessageBus] message bus for inbound/outbound messages
+      # @param provider [Provider] LLM provider instance
+      # @param workspace [String, Pathname] path to the agent workspace directory
+      # @param logger [Logger, nil] optional logger instance
+      # @param opts [Hash] additional options:
+      #   :model [String] LLM model override,
+      #   :max_iterations [Integer] max tool-call loop iterations (default 20),
+      #   :brave_api_key [String] Brave search API key,
+      #   :exec_config [Hash] shell exec configuration,
+      #   :restrict_to_workspace [Boolean] restrict file tools to workspace,
+      #   :confirm_tool_call [Proc] callback to confirm tool execution
       def initialize(bus:, provider:, workspace:, logger: nil, **opts)
         @bus = bus
         @provider = provider
@@ -125,7 +136,11 @@ module Nanobot
 
       private
 
-      # Main agent loop: LLM -> Tool Calls -> Execute -> Loop
+      # Main agent loop: repeatedly calls LLM and executes tool calls until
+      # the LLM returns a final text response or max_iterations is reached
+      # @param messages [Array<Hash>] message history in OpenAI format
+      # @param session [Session::Session, nil] current session for persistence
+      # @return [String] final response content
       def agent_loop(messages, session: nil)
         iteration = 0
 
@@ -153,6 +168,10 @@ module Nanobot
         "I've completed processing but reached the maximum iteration limit."
       end
 
+      # Append assistant tool-call message and execute each tool call
+      # @param response [Provider::Response] LLM response containing tool calls
+      # @param messages [Array<Hash>] message history to append to
+      # @param session [Session::Session, nil] session for persistence
       def process_tool_calls(response, messages, session)
         @logger.debug "Got #{response.tool_calls.length} tool call(s)"
 
@@ -168,12 +187,18 @@ module Nanobot
         end
       end
 
+      # Convert tool call objects to OpenAI-compatible hash format
+      # @param tool_calls [Array] tool call objects from provider response
+      # @return [Array<Hash>] serialized tool calls
       def serialize_tool_calls(tool_calls)
         tool_calls.map do |tc|
           { id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.generate(tc.arguments) } }
         end
       end
 
+      # Execute a single tool call, checking user confirmation if configured
+      # @param tool_call [Object] tool call with #name, #id, and #arguments
+      # @return [String] tool execution result
       def execute_tool_call(tool_call)
         @logger.debug "Executing tool: #{tool_call.name} id=#{tool_call.id}"
         @logger.debug "  Arguments: #{tool_call.arguments}"
@@ -188,6 +213,9 @@ module Nanobot
         result_str
       end
 
+      # Look up and invoke the tool by name
+      # @param tool_call [Object] tool call with #name and #arguments
+      # @return [String] tool result or error message
       def run_tool(tool_call)
         tool = @tool_instances.find { |t| t.name == tool_call.name }
         return "Error: Tool '#{tool_call.name}' not found" unless tool
@@ -196,6 +224,9 @@ module Nanobot
         result.is_a?(String) ? result : result.to_s
       end
 
+      # Handle built-in slash commands (/new, /help) before LLM processing
+      # @param msg [Bus::InboundMessage]
+      # @return [Bus::OutboundMessage, nil] response if command matched, nil otherwise
       def handle_slash_command(msg)
         case msg.content.strip
         when '/new'
@@ -210,6 +241,7 @@ module Nanobot
         end
       end
 
+      # @return [String] formatted help text listing available commands
       def help_text
         "Available commands:\n  " \
           "/new  - Start a new conversation session\n  " \

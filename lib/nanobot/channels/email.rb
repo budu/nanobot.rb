@@ -11,7 +11,10 @@ end
 
 module Nanobot
   module Channels
+    # Email channel using IMAP polling for inbound messages and SMTP for replies.
+    # Requires explicit consent_granted=true and optional auto_reply_enabled flag.
     class Email < BaseChannel
+      # Maximum number of tracked UIDs before clearing to prevent unbounded growth.
       MAX_PROCESSED_UIDS = 100_000
 
       def start
@@ -58,6 +61,8 @@ module Nanobot
         @running = false
       end
 
+      # Send an email reply via SMTP, respecting consent and auto-reply settings.
+      # @param message [Bus::OutboundMessage] message to send
       def send(message)
         unless @config.consent_granted
           @logger.warn 'Skip email send: consent_granted is false'
@@ -92,6 +97,8 @@ module Nanobot
 
       private
 
+      # Validate that all required IMAP and SMTP configuration fields are present.
+      # @return [Boolean]
       def valid_config?
         missing = []
         missing << 'imap_host' unless @config.imap_host
@@ -108,6 +115,8 @@ module Nanobot
         true
       end
 
+      # Connect to IMAP and fetch all unseen messages not yet processed.
+      # @return [Array<Hash>] array of message item hashes
       def fetch_new_messages
         messages = []
         imap = Net::IMAP.new(@config.imap_host, port: @config.imap_port,
@@ -129,6 +138,8 @@ module Nanobot
         messages
       end
 
+      # Safely disconnect an IMAP session, ignoring errors.
+      # @param imap [Net::IMAP] IMAP connection to close
       def disconnect_imap(imap)
         imap.logout
         imap.disconnect
@@ -136,6 +147,10 @@ module Nanobot
         @logger.debug "IMAP disconnect error (ignored): #{e.message}"
       end
 
+      # Fetch and process a single email UID, applying allow_from filtering.
+      # @param imap [Net::IMAP] active IMAP connection
+      # @param uid [Integer] message UID to process
+      # @return [Hash, nil] message item or nil if filtered out
       def process_uid(imap, uid)
         data = imap.fetch(uid, 'RFC822')&.first
         return unless data
@@ -150,6 +165,10 @@ module Nanobot
         item
       end
 
+      # Build a message item hash from a parsed Mail object.
+      # @param parsed [Mail::Message] parsed email
+      # @param sender [String] sender email address
+      # @return [Hash] message item with :sender, :subject, :content, :metadata keys
       def build_message_item(parsed, sender)
         subject = parsed.subject || ''
         message_id = parsed.message_id || ''
@@ -165,12 +184,19 @@ module Nanobot
         }
       end
 
+      # Track a processed UID and optionally mark it as Seen on the server.
+      # Clears the set if it exceeds MAX_PROCESSED_UIDS.
+      # @param imap [Net::IMAP] active IMAP connection
+      # @param uid [Integer] message UID to track
       def track_uid(imap, uid)
         @processed_uids.add(uid)
         @processed_uids.clear if @processed_uids.size > MAX_PROCESSED_UIDS
         imap.store(uid, '+FLAGS', [:Seen]) if @config.mark_seen
       end
 
+      # Extract the plain-text body from a Mail message, converting HTML if needed.
+      # @param mail [Mail::Message] parsed email
+      # @return [String] extracted body text
       def extract_body(mail)
         if mail.multipart?
           text_part = mail.text_part
@@ -189,6 +215,9 @@ module Nanobot
         '(could not extract email body)'
       end
 
+      # Convert HTML to plain text by stripping tags and unescaping entities.
+      # @param html [String] HTML content
+      # @return [String] plain text
       def html_to_text(html)
         html.gsub(%r{<\s*br\s*/?>}, "\n")
             .gsub(%r{<\s*/\s*p\s*>}, "\n")
@@ -196,6 +225,9 @@ module Nanobot
             .then { |t| CGI.unescapeHTML(t) }
       end
 
+      # Build a reply subject line, prepending the configured prefix if not already a reply.
+      # @param base [String] original subject
+      # @return [String] reply subject
       def reply_subject(base)
         subject = base.strip.empty? ? 'nanobot reply' : base.strip
         return subject if subject.downcase.start_with?('re:')
@@ -203,6 +235,8 @@ module Nanobot
         "#{@config.subject_prefix}#{subject}"
       end
 
+      # Deliver a Mail message via SMTP using the configured credentials.
+      # @param mail [Mail::Message] email to send
       def smtp_send(mail)
         mail.delivery_method :smtp,
                              address: @config.smtp_host,

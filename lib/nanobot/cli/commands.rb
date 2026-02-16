@@ -10,6 +10,8 @@ require_relative '../agent/loop'
 
 module Nanobot
   module CLI
+    # Thor-based CLI providing commands for onboarding, running the agent,
+    # serving as a multi-channel service, and checking status.
     # rubocop:disable Metrics/ClassLength
     class Commands < Thor
       def self.exit_on_failure?
@@ -77,6 +79,7 @@ module Nanobot
         puts "Nanobot version #{Nanobot::VERSION}"
       end
 
+      # Maps channel config keys to their class names for dynamic loading.
       CHANNEL_TYPES = {
         telegram: 'Telegram',
         discord: 'Discord',
@@ -85,8 +88,10 @@ module Nanobot
         email: 'Email'
       }.freeze
 
+      # Display names for supported LLM providers.
       PROVIDER_NAMES = { 'openrouter' => 'OpenRouter', 'anthropic' => 'Anthropic', 'openai' => 'OpenAI' }.freeze
 
+      # Default workspace files created during onboarding.
       BOOTSTRAP_FILES = {
         'AGENTS.md' => <<~CONTENT,
           # Agent Instructions
@@ -153,6 +158,11 @@ module Nanobot
 
       private
 
+      # Instantiate and register all enabled channels with the manager.
+      # @param manager [Channels::Manager] channel manager
+      # @param config [Config] application configuration
+      # @param bus [Bus::MessageBus] message bus
+      # @param logger [Logger] logger instance
       def register_channels(manager, config, bus, logger)
         CHANNEL_TYPES.each do |key, class_name|
           channel_config = config.channels.send(key)
@@ -166,6 +176,9 @@ module Nanobot
         end
       end
 
+      # Load config, create logger, and initialize the message bus.
+      # @param debug [Boolean] enable debug-level logging
+      # @return [Array(Config, Bus::MessageBus, Logger)]
       def load_runtime(debug: false)
         config = load_config
         logger = create_logger(config, debug)
@@ -173,6 +186,9 @@ module Nanobot
         [config, bus, logger]
       end
 
+      # Resolve and validate the workspace directory, exiting if not found.
+      # @param config [Config] application configuration
+      # @return [Pathname] expanded workspace path
       def require_workspace!(config)
         workspace = Pathname.new(config.agents.defaults.workspace).expand_path
         unless workspace.exist?
@@ -182,6 +198,10 @@ module Nanobot
         workspace
       end
 
+      # Build an Agent::Loop from config with optional model and debug overrides.
+      # @param model [String, nil] model name override
+      # @param debug [Boolean] enable debug-level logging
+      # @return [Agent::Loop]
       def build_agent_loop(model: nil, debug: false)
         config, bus, logger = load_runtime(debug: debug)
         provider = create_provider(config, model, logger: logger)
@@ -197,6 +217,11 @@ module Nanobot
         )
       end
 
+      # Build an Agent::Loop from pre-existing config, bus, and logger.
+      # @param config [Config] application configuration
+      # @param bus [Bus::MessageBus] message bus
+      # @param logger [Logger] logger instance
+      # @return [Agent::Loop]
       def build_agent_loop_from(config, bus, logger)
         provider = create_provider(config, nil, logger: logger)
         workspace = require_workspace!(config)
@@ -211,6 +236,9 @@ module Nanobot
         )
       end
 
+      # Process a single message through the agent and print the response.
+      # @param agent_loop [Agent::Loop] agent loop instance
+      # @param message [String] user message
       def run_single_message(agent_loop, message)
         puts 'Processing message...'
         response = agent_loop.process_direct(message)
@@ -218,6 +246,8 @@ module Nanobot
         puts response
       end
 
+      # Run a REPL-style interactive session reading from stdin.
+      # @param agent_loop [Agent::Loop] agent loop instance
       def run_interactive(agent_loop)
         puts 'Nanobot Agent (interactive mode)'
         puts "Type 'exit' or 'quit' to exit\n\n"
@@ -239,6 +269,10 @@ module Nanobot
         puts "\nGoodbye!"
       end
 
+      # Register INT and TERM signal handlers for graceful shutdown.
+      # @param manager [Channels::Manager] channel manager to stop
+      # @param agent_loop [Agent::Loop] agent loop to stop
+      # @param logger [Logger] logger instance
       def setup_signal_traps(manager, agent_loop, logger)
         %w[INT TERM].each do |signal|
           trap(signal) do
@@ -311,6 +345,10 @@ module Nanobot
         Config::Loader.load
       end
 
+      # Create a Logger to stderr with level from config or debug flag.
+      # @param config [Config] application configuration
+      # @param debug_flag [Boolean] if true, force DEBUG level
+      # @return [Logger]
       def create_logger(config, debug_flag)
         logger = Logger.new($stderr)
         logger.formatter = proc do |severity, _datetime, _progname, msg|
@@ -332,6 +370,11 @@ module Nanobot
         logger
       end
 
+      # Create an LLM provider instance, validating the API key is set and not a placeholder.
+      # @param config [Config] application configuration
+      # @param model_override [String, nil] optional model name override
+      # @param logger [Logger, nil] optional logger
+      # @return [Providers::RubyLLMProvider]
       def create_provider(config, model_override = nil, logger: nil)
         api_key = config.api_key
         api_base = config.api_base

@@ -6,11 +6,19 @@ require_relative 'base'
 
 module Nanobot
   module Providers
+    # LLM provider implementation backed by the RubyLLM gem.
+    # Supports Anthropic, OpenAI, DeepSeek, Groq, and OpenRouter backends.
     class RubyLLMProvider < LLMProvider
+      # Lightweight struct for replaying tool calls through RubyLLM message history.
       ToolCallProxy = Struct.new(:id, :name, :arguments)
 
       attr_reader :logger, :default_model
 
+      # @param api_key [String, nil] API key for the provider
+      # @param api_base [String, nil] custom API base URL
+      # @param default_model [String, nil] model identifier (defaults to claude-haiku-4-5)
+      # @param provider [String] provider backend name (anthropic, openai, deepseek, groq, openrouter)
+      # @param logger [Logger, nil] logger instance (defaults to null logger)
       def initialize(api_key: nil, api_base: nil, default_model: nil, provider: 'anthropic', logger: nil)
         super()
         @api_key = api_key
@@ -48,6 +56,12 @@ module Nanobot
 
       private
 
+      # Resolve the model and invoke the RubyLLM provider API directly.
+      # @param model_id [String] model identifier
+      # @param messages [Array<Hash>] message history
+      # @param tools [Array<RubyLLM::Tool>, nil] available tools
+      # @param temperature [Float] sampling temperature
+      # @return [RubyLLM::Message] provider response
       def call_provider(model_id, messages, tools, temperature)
         model_obj, provider = RubyLLM::Models.resolve(model_id, config: RubyLLM.config)
 
@@ -63,6 +77,7 @@ module Nanobot
         )
       end
 
+      # Log the outgoing LLM request details at debug level.
       def log_request(model, temperature, max_tokens, messages, tools)
         @logger.debug '=== LLM REQUEST ==='
         @logger.debug "Model: #{model} | Temperature: #{temperature} | Max tokens: #{max_tokens}"
@@ -75,6 +90,7 @@ module Nanobot
         log_tools(tools)
       end
 
+      # Log a single message's role, content, and any tool calls.
       def log_message(msg, index)
         role = msg[:role]
         content = msg[:content]
@@ -93,6 +109,7 @@ module Nanobot
         @logger.debug "  [#{index}] tool_call_id=#{msg[:tool_call_id]}" if msg[:tool_call_id]
       end
 
+      # Log available tool names and descriptions.
       def log_tools(tools)
         return unless tools && !tools.empty?
 
@@ -104,6 +121,7 @@ module Nanobot
         end
       end
 
+      # Log the LLM response content and tool calls.
       def log_response(response)
         @logger.debug '=== LLM RESPONSE ==='
         @logger.debug "Content length: #{response.content&.length || 0}"
@@ -119,6 +137,9 @@ module Nanobot
         @logger.debug '=== END LLM RESPONSE ==='
       end
 
+      # Convert internal message hashes to RubyLLM::Message objects.
+      # @param messages [Array<Hash>] message hashes with :role, :content, :tool_calls, :tool_call_id
+      # @return [Array<RubyLLM::Message>]
       def build_rubyllm_messages(messages)
         messages.map do |msg|
           RubyLLM::Message.new(
@@ -130,6 +151,9 @@ module Nanobot
         end
       end
 
+      # Convert an array of tool instances to a hash keyed by tool name.
+      # @param tools [Array<RubyLLM::Tool>, nil] tool instances
+      # @return [Hash{Symbol => RubyLLM::Tool}]
       def build_tools_hash(tools)
         tools_hash = {}
         if tools && !tools.empty?
@@ -140,6 +164,7 @@ module Nanobot
         tools_hash
       end
 
+      # Configure the RubyLLM client with the appropriate API key for the provider.
       def configure_client
         return unless @api_key
 
@@ -160,7 +185,9 @@ module Nanobot
         @logger.debug "Configured RubyLLM for provider: #{@provider}"
       end
 
-      # Convert RubyLLM tool calls to our format
+      # Convert RubyLLM tool calls to our ToolCallRequest format.
+      # @param response [RubyLLM::Message] LLM response
+      # @return [Array<ToolCallRequest>]
       def convert_tool_calls(response)
         return [] unless response.tool_call?
 
@@ -173,7 +200,9 @@ module Nanobot
         end
       end
 
-      # Convert our tool call format to RubyLLM format (for history replay)
+      # Convert our tool call format to RubyLLM format for history replay.
+      # @param tool_calls [Array<Hash>, nil] tool calls in OpenAI-style format
+      # @return [Hash{String => ToolCallProxy}, nil] tool calls keyed by ID
       def convert_tool_calls_to_rubyllm(tool_calls)
         return nil unless tool_calls && !tool_calls.empty?
 

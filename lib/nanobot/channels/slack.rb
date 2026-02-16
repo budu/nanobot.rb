@@ -8,6 +8,8 @@ end
 
 module Nanobot
   module Channels
+    # Slack channel integration using Socket Mode via the slack-ruby-client gem.
+    # Supports DMs, group mentions, and configurable access control policies.
     class Slack < BaseChannel
       def start
         @running = true
@@ -35,6 +37,8 @@ module Nanobot
         @socket_client&.stop!
       end
 
+      # Send a reply via Slack, threading in channels but not in DMs.
+      # @param message [Bus::OutboundMessage] message to send
       def send(message)
         return unless @web_client
 
@@ -50,13 +54,14 @@ module Nanobot
         )
       end
 
-      # Override base allowed? since Slack has its own ACL via allowed_slack?
+      # Always returns true; Slack uses its own ACL via allowed_slack? instead.
       def allowed?(_sender_id)
         true
       end
 
       private
 
+      # Fetch the bot's own Slack user ID via auth_test for mention detection.
       def resolve_bot_user_id
         auth = @web_client.auth_test
         @bot_user_id = auth['user_id']
@@ -65,6 +70,9 @@ module Nanobot
         @logger.warn "Slack auth_test failed: #{e.message}"
       end
 
+      # Process an incoming Slack message event, applying access control and
+      # bot-mention filtering before dispatching to the message bus.
+      # @param data [Hash] Slack event payload
       def handle_slack_message(data)
         return if data['subtype']
         return if @bot_user_id && data['user'] == @bot_user_id
@@ -97,6 +105,11 @@ module Nanobot
         )
       end
 
+      # Check Slack-specific access control based on DM/group policies.
+      # @param sender_id [String] Slack user ID
+      # @param chat_id [String] Slack channel ID
+      # @param channel_type [String] "im" for DMs, other for group channels
+      # @return [Boolean]
       def allowed_slack?(sender_id, chat_id, channel_type)
         if channel_type == 'im'
           return false unless @config.dm.enabled
@@ -109,6 +122,11 @@ module Nanobot
         @config.group_allow_from.include?(chat_id)
       end
 
+      # Determine whether the bot should respond in a group channel based on
+      # group_policy (open, mention, or allowlist).
+      # @param text [String] message text
+      # @param chat_id [String] Slack channel ID
+      # @return [Boolean]
       def should_respond_in_channel?(text, chat_id)
         case @config.group_policy
         when 'open' then true
@@ -120,12 +138,18 @@ module Nanobot
         end
       end
 
+      # Remove the bot's @mention from message text.
+      # @param text [String] raw message text
+      # @return [String] text with bot mention stripped
       def strip_bot_mention(text)
         return text unless @bot_user_id
 
         text.gsub(/<@#{Regexp.escape(@bot_user_id)}>\s*/, '').strip
       end
 
+      # Add an :eyes: reaction to acknowledge receipt of a message.
+      # @param channel [String] Slack channel ID
+      # @param timestamp [String] message timestamp for the reaction
       def add_eyes_reaction(channel, timestamp)
         return unless @web_client && timestamp
 

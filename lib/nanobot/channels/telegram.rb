@@ -8,6 +8,8 @@ end
 
 module Nanobot
   module Channels
+    # Telegram channel integration using the telegram-bot-ruby gem.
+    # Listens for messages via long polling and shows typing indicators.
     class Telegram < BaseChannel
       def start
         @running = true
@@ -33,6 +35,8 @@ module Nanobot
         @running = false
       end
 
+      # Send a reply to a Telegram chat, splitting at the 4096-char limit.
+      # @param message [Bus::OutboundMessage] message to send
       def send(message)
         return unless @bot
 
@@ -44,6 +48,8 @@ module Nanobot
 
       private
 
+      # Register bot slash commands (/new, /help) with the Telegram API.
+      # @param bot [Telegram::Bot::Client] the bot client
       def register_commands(bot)
         bot.api.set_my_commands(commands: [
                                   { command: 'new', description: 'Start a new session' },
@@ -53,12 +59,18 @@ module Nanobot
         @logger.warn "Failed to register Telegram commands: #{e.message}"
       end
 
+      # Split text into chunks of at most limit characters.
+      # @param text [String] text to split
+      # @param limit [Integer] maximum chunk size
+      # @return [Array<String>]
       def split_message(text, limit)
         return [''] if text.nil? || text.empty?
 
         text.chars.each_slice(limit).map(&:join)
       end
 
+      # Start a background thread that sends "typing" indicators every 4 seconds.
+      # @param chat_id [String] chat to show typing in
       def start_typing(chat_id)
         @typing_threads ||= {}
         @typing_threads[chat_id]&.kill
@@ -72,6 +84,8 @@ module Nanobot
         end
       end
 
+      # Stop the typing indicator thread for a chat.
+      # @param chat_id [String] chat to stop typing in
       def stop_typing(chat_id)
         @typing_threads&.delete(chat_id)&.kill
       end

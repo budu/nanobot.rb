@@ -15,6 +15,11 @@ module Nanobot
       :metadata,
       keyword_init: true
     ) do
+      # @param channel [String] source channel name (e.g. 'telegram', 'slack')
+      # @param sender_id [String] unique identifier for the message sender
+      # @param chat_id [String] unique identifier for the chat/conversation
+      # @param content [String] message text content
+      # @param opts [Hash] optional fields: :timestamp, :media, :metadata
       def initialize(channel:, sender_id:, chat_id:, content:, **opts)
         super(
           channel: channel,
@@ -27,6 +32,8 @@ module Nanobot
         )
       end
 
+      # Generates a unique session key combining channel and chat_id
+      # @return [String] key in the format "channel:chat_id"
       def session_key
         "#{channel}:#{chat_id}"
       end
@@ -42,6 +49,12 @@ module Nanobot
       :metadata,
       keyword_init: true
     ) do
+      # @param channel [String] target channel name
+      # @param chat_id [String] target chat/conversation ID
+      # @param content [String] message text content
+      # @param reply_to [String, nil] ID of message being replied to
+      # @param media [Array, nil] media attachments
+      # @param metadata [Hash, nil] additional metadata
       def initialize(channel:, chat_id:, content:, reply_to: nil, media: nil, metadata: nil)
         super(
           channel: channel,

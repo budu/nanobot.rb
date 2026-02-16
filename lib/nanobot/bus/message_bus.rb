@@ -10,6 +10,7 @@ module Nanobot
     class MessageBus
       attr_reader :logger
 
+      # @param logger [Logger, nil] optional logger instance
       def initialize(logger: nil)
         @inbound_queue = Queue.new
         @outbound_queue = Queue.new
@@ -21,6 +22,7 @@ module Nanobot
       end
 
       # Publish an inbound message (from channel to agent)
+      # @param message [InboundMessage]
       def publish_inbound(message)
         raise ArgumentError, 'Message must be an InboundMessage' unless message.is_a?(InboundMessage)
 
@@ -46,6 +48,7 @@ module Nanobot
       end
 
       # Publish an outbound message (from agent to channels)
+      # @param message [OutboundMessage]
       def publish_outbound(message)
         raise ArgumentError, 'Message must be an OutboundMessage' unless message.is_a?(OutboundMessage)
 
@@ -87,11 +90,13 @@ module Nanobot
       end
 
       # Check if the message bus is running
+      # @return [Boolean]
       def running?
         @running
       end
 
       # Get queue sizes for monitoring
+      # @return [Hash{Symbol => Integer}] :inbound and :outbound counts
       def queue_sizes
         {
           inbound: @inbound_queue.size,
@@ -119,6 +124,7 @@ module Nanobot
       end
 
       # Dispatch a single message to all subscribers for its channel
+      # @param message [OutboundMessage]
       def dispatch_message(message)
         subscribers = @mutex.synchronize { @outbound_subscribers[message.channel].dup }
 
@@ -133,6 +139,8 @@ module Nanobot
       end
 
       # Dispatch to a single subscriber with error handling
+      # @param callback [Proc] subscriber callback
+      # @param message [OutboundMessage]
       def dispatch_to_subscriber(callback, message)
         callback.call(message)
       rescue StandardError => e

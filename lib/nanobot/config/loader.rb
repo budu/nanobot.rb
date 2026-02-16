@@ -92,6 +92,8 @@ module Nanobot
         private
 
         # Convert config to hash for JSON serialization
+        # @param config [Config] configuration object
+        # @return [Hash] JSON-serializable hash
         def config_to_hash(config)
           hash = {
             providers: providers_to_hash(config.providers),
@@ -104,6 +106,9 @@ module Nanobot
           hash
         end
 
+        # Serialize providers, omitting unconfigured ones
+        # @param providers [ProvidersConfig]
+        # @return [Hash]
         def providers_to_hash(providers)
           hash = {}
           %i[openrouter anthropic openai deepseek groq].each do |key|
@@ -145,6 +150,9 @@ module Nanobot
           }
         end
 
+        # Serialize channels, omitting disabled ones
+        # @param channels [ChannelsConfig, nil]
+        # @return [Hash]
         def channels_to_hash(channels)
           return {} unless channels
 

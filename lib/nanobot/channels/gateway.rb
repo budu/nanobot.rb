@@ -7,6 +7,8 @@ require 'timeout'
 
 module Nanobot
   module Channels
+    # HTTP Gateway channel exposing a synchronous /chat REST endpoint via WEBrick.
+    # Supports optional Bearer token authentication and a /health endpoint.
     class Gateway < BaseChannel
       def start
         @running = true
@@ -32,6 +34,8 @@ module Nanobot
         @server&.shutdown
       end
 
+      # Deliver a response to the waiting HTTP request by pushing onto its queue.
+      # @param message [Bus::OutboundMessage] message to send
       def send(message)
         queue = @queues_mutex.synchronize { @response_queues.delete(message.chat_id) }
         queue&.push(message)
@@ -39,6 +43,10 @@ module Nanobot
 
       private
 
+      # Handle a POST /chat request: parse JSON body, dispatch to the bus, and
+      # block until a response arrives or timeout (120s).
+      # @param req [WEBrick::HTTPRequest]
+      # @param res [WEBrick::HTTPResponse]
       def handle_http_request(req, res)
         return error_response(res, 405, 'Method not allowed') unless req.request_method == 'POST'
 
@@ -67,17 +75,26 @@ module Nanobot
         error_response(res, 400, 'Invalid JSON')
       end
 
+      # Respond with a JSON health check status.
+      # @param res [WEBrick::HTTPResponse]
       def handle_health(res)
         res.content_type = 'application/json'
         res.body = JSON.generate({ status: 'ok' })
       end
 
+      # Check Bearer token authorization if auth_token is configured.
+      # @param req [WEBrick::HTTPRequest]
+      # @return [Boolean]
       def authorized?(req)
         return true unless @config.auth_token
 
         req['Authorization'] == "Bearer #{@config.auth_token}"
       end
 
+      # Write a JSON error response.
+      # @param res [WEBrick::HTTPResponse]
+      # @param status [Integer] HTTP status code
+      # @param message [String] error message
       def error_response(res, status, message)
         res.status = status
         res.content_type = 'application/json'

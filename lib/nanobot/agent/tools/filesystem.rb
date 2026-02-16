@@ -13,6 +13,9 @@ module Nanobot
       module WorkspaceSandbox
         private
 
+        # Check whether a path resides within the allowed workspace directory.
+        # @param path [Pathname] path to check
+        # @return [Boolean]
         def within_allowed_dir?(path)
           return true unless @allowed_dir
 
@@ -21,6 +24,10 @@ module Nanobot
           resolved.start_with?(allowed) || resolved == @allowed_dir.to_s
         end
 
+        # Resolve a path to its real filesystem location, handling symlinks.
+        # For paths that don't yet exist, resolves the parent and appends the basename.
+        # @param path [Pathname] path to resolve
+        # @return [String] resolved absolute path
         def resolve_real_path(path)
           expanded = path.expand_path
           if expanded.exist?
@@ -43,11 +50,15 @@ module Nanobot
         description 'Read the contents of a file'
         param :path, desc: 'Path to the file to read', required: true
 
+        # @param allowed_dir [String, nil] workspace directory to restrict access to
         def initialize(allowed_dir: nil)
           super()
           @allowed_dir = allowed_dir ? Pathname.new(allowed_dir).expand_path : nil
         end
 
+        # Read file contents from the given path.
+        # @param path [String] path to the file to read
+        # @return [String] file contents or error message
         def execute(path:)
           file_path = Pathname.new(path).expand_path
 
@@ -75,11 +86,16 @@ module Nanobot
         param :path, desc: 'Path to the file to write', required: true
         param :content, desc: 'Content to write to the file', required: true
 
+        # @param allowed_dir [String, nil] workspace directory to restrict access to
         def initialize(allowed_dir: nil)
           super()
           @allowed_dir = allowed_dir ? Pathname.new(allowed_dir).expand_path : nil
         end
 
+        # Write content to a file, creating parent directories as needed.
+        # @param path [String] path to the file to write
+        # @param content [String] content to write
+        # @return [String] success message or error message
         def execute(path:, content:)
           file_path = Pathname.new(path).expand_path
 
@@ -109,11 +125,17 @@ module Nanobot
         param :old_text, desc: 'Text to search for and replace', required: true
         param :new_text, desc: 'Text to replace with', required: true
 
+        # @param allowed_dir [String, nil] workspace directory to restrict access to
         def initialize(allowed_dir: nil)
           super()
           @allowed_dir = allowed_dir ? Pathname.new(allowed_dir).expand_path : nil
         end
 
+        # Replace a unique occurrence of old_text with new_text in a file.
+        # @param path [String] path to the file to edit
+        # @param old_text [String] text to search for and replace
+        # @param new_text [String] replacement text
+        # @return [String] success message or error message
         def execute(path:, old_text:, new_text:)
           file_path = Pathname.new(path).expand_path
 
@@ -151,11 +173,15 @@ module Nanobot
         description 'List contents of a directory'
         param :path, desc: 'Path to the directory to list', required: true
 
+        # @param allowed_dir [String, nil] workspace directory to restrict access to
         def initialize(allowed_dir: nil)
           super()
           @allowed_dir = allowed_dir ? Pathname.new(allowed_dir).expand_path : nil
         end
 
+        # List the contents of a directory, sorted alphabetically.
+        # @param path [String] path to the directory to list
+        # @return [String] newline-separated entries or error message
         def execute(path:)
           dir_path = Pathname.new(path).expand_path
 

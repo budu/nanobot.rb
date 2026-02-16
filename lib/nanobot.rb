@@ -14,6 +14,8 @@ require_relative 'nanobot/config/loader'
 require_relative 'nanobot/channels/base'
 require_relative 'nanobot/channels/manager'
 
+# Multi-channel AI chatbot framework powered by RubyLLM
 module Nanobot
+  # Base error class for all Nanobot errors
   class Error < StandardError; end
 end

@@ -11,6 +11,11 @@ module Nanobot
     class Session
       attr_accessor :key, :messages, :created_at, :updated_at, :metadata
 
+      # @param key [String] unique session identifier (e.g. "channel:chat_id")
+      # @param messages [Array<Hash>] pre-existing messages to load
+      # @param created_at [Time, nil] creation timestamp (defaults to now)
+      # @param updated_at [Time, nil] last update timestamp (defaults to now)
+      # @param metadata [Hash] arbitrary session metadata
       def initialize(key, messages: [], created_at: nil, updated_at: nil, metadata: {})
         @key = key
         @messages = messages
@@ -70,6 +75,7 @@ module Nanobot
     class Manager
       attr_reader :workspace, :sessions_dir
 
+      # @param workspace [String] path to the project workspace directory
       def initialize(workspace)
         @workspace = Pathname.new(workspace).expand_path
         @sessions_dir = Pathname.new(File.expand_path('~/.nanobot/sessions'))

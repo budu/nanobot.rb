@@ -9,6 +9,7 @@ module Nanobot
     class MemoryStore
       attr_reader :workspace
 
+      # @param workspace [String, Pathname] path to the agent workspace directory
       def initialize(workspace)
         @workspace = Pathname.new(workspace).expand_path
         @memory_dir = @workspace / 'memory'

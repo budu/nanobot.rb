@@ -27,6 +27,9 @@ module Nanobot
           %r{>/dev/sd[a-z]}i # writing to disk devices
         ].freeze
 
+        # @param working_dir [String, nil] directory to run commands in (defaults to cwd)
+        # @param timeout [Integer] maximum seconds before a command is killed
+        # @param restrict_to_workspace [Boolean] when true, block commands referencing paths outside working_dir
         def initialize(working_dir: nil, timeout: 60, restrict_to_workspace: false)
           super()
           @working_dir = working_dir ? Pathname.new(working_dir).expand_path.to_s : Dir.pwd
@@ -34,6 +37,9 @@ module Nanobot
           @restrict_to_workspace = restrict_to_workspace
         end
 
+        # Execute a shell command and return its combined output.
+        # @param command [String] shell command to execute
+        # @return [String] formatted output with exit code, stdout, and stderr
         def execute(command:)
           # Security: Check for dangerous patterns
           return 'Error: Command blocked for security reasons. Contains dangerous patterns.' if dangerous?(command)
@@ -75,6 +81,9 @@ module Nanobot
 
         private
 
+        # Check if a command matches any blocked pattern.
+        # @param command [String] command string to check
+        # @return [Boolean]
         def dangerous?(command)
           DENY_PATTERNS.any? { |pattern| command.match?(pattern) }
         end
@@ -92,6 +101,10 @@ module Nanobot
           end
         end
 
+        # Run a command via Open3, killing the process group on timeout.
+        # @param command [String] shell command to execute
+        # @return [Array(String, String, Process::Status)] stdout, stderr, and exit status
+        # @raise [Timeout::Error] if the command exceeds the configured timeout
         def execute_with_timeout(command)
           stdin, stdout, stderr, wait_thread = Open3.popen3(
             command,
@@ -134,6 +147,8 @@ module Nanobot
           end
         end
 
+        # Send TERM then KILL to an entire process group.
+        # @param pid [Integer] process ID whose group to kill
         def kill_process_group(pid)
           pgid = Process.getpgid(pid)
           Process.kill('-TERM', pgid)
@@ -144,6 +159,9 @@ module Nanobot
           # Process already exited or not permitted
         end
 
+        # Check whether a process is still running.
+        # @param pid [Integer] process ID to check
+        # @return [Boolean]
         def process_alive?(pid)
           Process.kill(0, pid)
           true

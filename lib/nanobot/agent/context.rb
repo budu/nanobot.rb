@@ -12,6 +12,8 @@ module Nanobot
 
       attr_reader :workspace, :memory_store
 
+      # @param workspace [String, Pathname] path to the agent workspace directory
+      # @param logger [Logger, nil] optional logger instance
       def initialize(workspace, logger: nil)
         @workspace = Pathname.new(workspace).expand_path
         @memory_store = MemoryStore.new(@workspace)
@@ -98,6 +100,8 @@ module Nanobot
 
       private
 
+      # Assemble OS, Ruby, and workspace info for the system prompt
+      # @return [String]
       def build_runtime_info
         <<~INFO
           # Runtime Information
@@ -110,6 +114,9 @@ module Nanobot
         INFO
       end
 
+      # Read a bootstrap markdown file from the workspace root
+      # @param filename [String] name of the file (e.g. 'SOUL.md')
+      # @return [String, nil] file content with header, or nil if missing/empty
       def read_bootstrap_file(filename)
         file_path = @workspace / filename
         return nil unless file_path.exist?

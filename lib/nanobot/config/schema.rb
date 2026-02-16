@@ -4,14 +4,17 @@ module Nanobot
   module Config
     # Configuration schema classes using plain Ruby hashes and structs
 
-    # Provider configuration
+    # Credentials and endpoint for a single LLM provider
     ProviderConfig = Struct.new(:api_key, :api_base, :extra_headers, keyword_init: true) do
+      # @param api_key [String, nil] API authentication key
+      # @param api_base [String, nil] custom API base URL
+      # @param extra_headers [Hash, nil] additional HTTP headers sent with requests
       def initialize(api_key: nil, api_base: nil, extra_headers: nil)
         super
       end
     end
 
-    # All providers configuration
+    # Collection of all supported LLM provider configurations
     ProvidersConfig = Struct.new(
       :openrouter,
       :anthropic,
@@ -20,6 +23,11 @@ module Nanobot
       :groq,
       keyword_init: true
     ) do
+      # @param openrouter [Hash, nil] OpenRouter provider settings
+      # @param anthropic [Hash, nil] Anthropic provider settings
+      # @param openai [Hash, nil] OpenAI provider settings
+      # @param deepseek [Hash, nil] DeepSeek provider settings
+      # @param groq [Hash, nil] Groq provider settings
       def initialize(**kwargs)
         super(
           openrouter: kwargs[:openrouter] ? ProviderConfig.new(**kwargs[:openrouter]) : nil,
@@ -31,7 +39,7 @@ module Nanobot
       end
     end
 
-    # Agent defaults configuration
+    # Default settings applied to all agents unless overridden
     AgentDefaults = Struct.new(
       :model,
       :workspace,
@@ -41,6 +49,12 @@ module Nanobot
       :log_level,
       keyword_init: true
     ) do
+      # @param model [String] default LLM model identifier
+      # @param workspace [String] path to agent workspace directory
+      # @param max_tokens [Integer] maximum tokens per LLM response
+      # @param temperature [Float] sampling temperature (0.0-1.0)
+      # @param max_tool_iterations [Integer] maximum tool call rounds per turn
+      # @param log_level [String] logging verbosity (debug, info, warn, error)
       def initialize(
         model: 'claude-haiku-4-5',
         workspace: '~/.nanobot/workspace',
@@ -53,29 +67,35 @@ module Nanobot
       end
     end
 
-    # Agents configuration
+    # Top-level agents section wrapping agent defaults
     AgentsConfig = Struct.new(:defaults, keyword_init: true) do
+      # @param defaults [Hash] agent default settings (see AgentDefaults)
       def initialize(defaults: {})
         super(defaults: AgentDefaults.new(**defaults))
       end
     end
 
-    # Web search configuration
+    # Web search tool API settings
     WebSearchConfig = Struct.new(:api_key, keyword_init: true) do
+      # @param api_key [String, nil] Brave Search API key
       def initialize(api_key: nil)
         super
       end
     end
 
-    # Exec tool configuration
+    # Shell command execution tool settings
     ExecToolConfig = Struct.new(:timeout, keyword_init: true) do
+      # @param timeout [Integer] maximum seconds before killing the process
       def initialize(timeout: 60)
         super
       end
     end
 
-    # Tools configuration
+    # Aggregate configuration for all agent tools
     ToolsConfig = Struct.new(:web, :exec, :restrict_to_workspace, keyword_init: true) do
+      # @param web [Hash] web tool settings (nested :search key)
+      # @param exec [Hash] exec tool settings (see ExecToolConfig)
+      # @param restrict_to_workspace [Boolean] limit file tools to workspace directory
       def initialize(web: {}, exec: {}, restrict_to_workspace: false)
         web_config = web.is_a?(Hash) ? web : {}
         exec_config = exec.is_a?(Hash) ? exec : {}
@@ -92,6 +112,10 @@ module Nanobot
 
     # Telegram channel configuration
     TelegramConfig = Struct.new(:enabled, :token, :allow_from, :proxy, keyword_init: true) do
+      # @param enabled [Boolean] whether the Telegram channel is active
+      # @param token [String, nil] Telegram Bot API token
+      # @param allow_from [Array<String>] allowed usernames or chat IDs
+      # @param proxy [String, nil] HTTP proxy URL for Telegram API requests
       def initialize(enabled: false, token: nil, allow_from: [], proxy: nil)
         super
       end
@@ -99,6 +123,9 @@ module Nanobot
 
     # Discord channel configuration
     DiscordConfig = Struct.new(:enabled, :token, :allow_from, keyword_init: true) do
+      # @param enabled [Boolean] whether the Discord channel is active
+      # @param token [String, nil] Discord bot token
+      # @param allow_from [Array<String>] allowed user IDs or usernames
       def initialize(enabled: false, token: nil, allow_from: [])
         super
       end
@@ -106,13 +133,20 @@ module Nanobot
 
     # HTTP Gateway channel configuration
     GatewayConfig = Struct.new(:enabled, :host, :port, :auth_token, keyword_init: true) do
+      # @param enabled [Boolean] whether the HTTP gateway is active
+      # @param host [String] bind address for the HTTP server
+      # @param port [Integer] listen port for the HTTP server
+      # @param auth_token [String, nil] bearer token for authenticating requests
       def initialize(enabled: false, host: '127.0.0.1', port: 18_790, auth_token: nil)
         super
       end
     end
 
-    # Slack DM policy configuration
+    # Slack direct message policy configuration
     SlackDMConfig = Struct.new(:enabled, :policy, :allow_from, keyword_init: true) do
+      # @param enabled [Boolean] whether DM handling is active
+      # @param policy [String] access policy: "open" or "restricted"
+      # @param allow_from [Array<String>] allowed Slack user IDs when policy is restricted
       def initialize(enabled: true, policy: 'open', allow_from: [])
         super
       end
@@ -123,6 +157,12 @@ module Nanobot
       :enabled, :bot_token, :app_token, :group_policy,
       :group_allow_from, :dm, keyword_init: true
     ) do
+      # @param enabled [Boolean] whether the Slack channel is active
+      # @param bot_token [String, nil] Slack Bot User OAuth token (xoxb-)
+      # @param app_token [String, nil] Slack App-Level token for Socket Mode (xapp-)
+      # @param group_policy [String] group message policy: "mention" or "all"
+      # @param group_allow_from [Array<String>] allowed channel IDs for group messages
+      # @param dm [Hash] direct message settings (see SlackDMConfig)
       def initialize(
         enabled: false, bot_token: nil, app_token: nil,
         group_policy: 'mention', group_allow_from: [], dm: {}
@@ -136,7 +176,7 @@ module Nanobot
       end
     end
 
-    # Email channel configuration
+    # Email channel configuration for IMAP polling and SMTP replies
     EmailConfig = Struct.new(
       :enabled, :consent_granted,
       :imap_host, :imap_port, :imap_username, :imap_password,
@@ -147,6 +187,27 @@ module Nanobot
       :max_body_chars, :subject_prefix, :allow_from,
       keyword_init: true
     ) do
+      # @param enabled [Boolean] whether the email channel is active
+      # @param consent_granted [Boolean] user consent for automated email replies
+      # @param imap_host [String, nil] IMAP server hostname
+      # @param imap_port [Integer] IMAP server port
+      # @param imap_username [String, nil] IMAP login username
+      # @param imap_password [String, nil] IMAP login password
+      # @param imap_mailbox [String] IMAP mailbox to poll
+      # @param imap_use_ssl [Boolean] use SSL for IMAP connection
+      # @param smtp_host [String, nil] SMTP server hostname
+      # @param smtp_port [Integer] SMTP server port
+      # @param smtp_username [String, nil] SMTP login username
+      # @param smtp_password [String, nil] SMTP login password
+      # @param smtp_use_tls [Boolean] use STARTTLS for SMTP
+      # @param smtp_use_ssl [Boolean] use implicit SSL for SMTP
+      # @param from_address [String, nil] sender address for outgoing replies
+      # @param auto_reply_enabled [Boolean] automatically reply to incoming emails
+      # @param poll_interval_seconds [Integer] seconds between IMAP polls
+      # @param mark_seen [Boolean] mark processed emails as seen
+      # @param max_body_chars [Integer] truncate email body beyond this length
+      # @param subject_prefix [String] prefix prepended to reply subjects
+      # @param allow_from [Array<String>] allowed sender addresses
       def initialize(
         enabled: false, consent_granted: false,
         imap_host: nil, imap_port: 993, imap_username: nil, imap_password: nil,
@@ -159,8 +220,13 @@ module Nanobot
         super
       end
     end
-    # All channels configuration
+    # Collection of all messaging channel configurations
     ChannelsConfig = Struct.new(:telegram, :discord, :gateway, :slack, :email, keyword_init: true) do
+      # @param telegram [Hash] Telegram channel settings (see TelegramConfig)
+      # @param discord [Hash] Discord channel settings (see DiscordConfig)
+      # @param gateway [Hash] HTTP gateway settings (see GatewayConfig)
+      # @param slack [Hash] Slack channel settings (see SlackConfig)
+      # @param email [Hash] email channel settings (see EmailConfig)
       def initialize(telegram: {}, discord: {}, gateway: {}, slack: {}, email: {})
         super(
           telegram: TelegramConfig.new(**(telegram.is_a?(Hash) ? telegram : {})),
@@ -172,8 +238,13 @@ module Nanobot
       end
     end
 
-    # Main configuration class
+    # Root configuration object holding all Nanobot settings
     Config = Struct.new(:providers, :provider, :agents, :tools, :channels, keyword_init: true) do
+      # @param providers [Hash] provider credentials (see ProvidersConfig)
+      # @param provider [String] name of the active provider (e.g. "anthropic", "openai")
+      # @param agents [Hash] agent settings (see AgentsConfig)
+      # @param tools [Hash] tool settings (see ToolsConfig)
+      # @param channels [Hash] channel settings (see ChannelsConfig)
       def initialize(providers: {}, provider: 'anthropic', agents: {}, tools: {}, channels: {}, **_rest)
         channels_config = channels.is_a?(Hash) ? channels : {}
         super(
@@ -186,12 +257,14 @@ module Nanobot
       end
 
       # Get the API key for the selected provider
+      # @return [String, nil]
       def api_key
         selected = providers.send(provider.to_sym) if providers.respond_to?(provider.to_sym)
         selected&.api_key
       end
 
       # Get the API base for the selected provider
+      # @return [String, nil]
       def api_base
         selected = providers.send(provider.to_sym) if providers.respond_to?(provider.to_sym)
         selected&.api_base

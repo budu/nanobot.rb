@@ -9,6 +9,10 @@ module Nanobot
     class Manager
       attr_reader :channels, :bus, :logger
 
+      # @param config [Config] channel configuration
+      # @param bus [Bus::MessageBus] message bus for pub/sub
+      # @param logger [Logger, nil] optional logger
+      # @param restart_delay [Integer] base delay in seconds between restart attempts
       def initialize(config:, bus:, logger: nil, restart_delay: 5)
         @config = config
         @bus = bus
@@ -90,6 +94,13 @@ module Nanobot
 
       private
 
+      # Start a channel in a supervised thread that auto-restarts on crash
+      # with exponential backoff up to max_restarts attempts.
+      # @param name [String] channel name
+      # @param channel [BaseChannel] channel instance to supervise
+      # @param max_restarts [Integer] maximum restart attempts before giving up
+      # @param restart_delay [Integer] base delay in seconds, multiplied by restart count
+      # @return [Thread] the supervision thread
       def start_channel_with_supervision(name, channel, max_restarts: 3, restart_delay: 5)
         Thread.new do
           restarts = 0

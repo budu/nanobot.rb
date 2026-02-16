@@ -8,6 +8,8 @@ end
 
 module Nanobot
   module Channels
+    # Discord channel integration using the discordrb gem.
+    # Listens for server messages and responds in the same channel.
     class Discord < BaseChannel
       def start
         @running = true
@@ -33,6 +35,8 @@ module Nanobot
         @bot&.stop
       end
 
+      # Send a message to a Discord channel, splitting at the 2000-char limit.
+      # @param message [Bus::OutboundMessage] message to send
       def send(message)
         return unless @bot
 
@@ -46,6 +50,10 @@ module Nanobot
 
       private
 
+      # Split text into chunks of at most limit characters.
+      # @param text [String] text to split
+      # @param limit [Integer] maximum chunk size
+      # @return [Array<String>]
       def split_message(text, limit)
         return [''] if text.nil? || text.empty?
 

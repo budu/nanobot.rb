@@ -17,11 +17,16 @@ module Nanobot
         param :query, desc: 'Search query', required: true
         param :count, type: 'integer', desc: 'Number of results to return (default: 5)', required: false
 
+        # @param api_key [String, nil] Brave Search API key (falls back to BRAVE_SEARCH_API_KEY env var)
         def initialize(api_key: nil)
           super()
           @api_key = api_key || ENV.fetch('BRAVE_SEARCH_API_KEY', nil)
         end
 
+        # Perform a web search and return formatted results.
+        # @param query [String] search query
+        # @param count [Integer] number of results to return
+        # @return [String] formatted search results or error message
         def execute(query:, count: 5)
           return 'Error: Brave Search API key not configured' unless @api_key
 
@@ -38,6 +43,10 @@ module Nanobot
 
         private
 
+        # Call the Brave Search API.
+        # @param query [String] search query
+        # @param count [Integer] number of results
+        # @return [Hash] parsed JSON response
         def search(query, count)
           conn = Faraday.new(url: 'https://api.search.brave.com') do |f|
             f.request :url_encoded
@@ -56,6 +65,9 @@ module Nanobot
           JSON.parse(response.body)
         end
 
+        # Format API response into a human-readable string.
+        # @param response [Hash] parsed Brave Search API response
+        # @return [String] formatted results
         def format_results(response)
           results = response['web']['results'] || []
 
@@ -96,6 +108,9 @@ module Nanobot
 
         USER_AGENT = 'Mozilla/5.0 (compatible)'
 
+        # Fetch a web page, validate its URL, and return parsed content.
+        # @param url [String] URL to fetch
+        # @return [String] parsed page content or error message
         def execute(url:)
           validate_url!(url)
           content = fetch(url)
@@ -106,6 +121,9 @@ module Nanobot
 
         private
 
+        # Validate a URL's scheme and ensure it does not resolve to a private address.
+        # @param url [String] URL to validate
+        # @raise [RuntimeError] if the URL is invalid or resolves to a private IP
         def validate_url!(url)
           uri = URI.parse(url)
           raise 'Invalid URL scheme: only http and https are allowed' unless %w[http https].include?(uri.scheme)
@@ -122,6 +140,11 @@ module Nanobot
           end
         end
 
+        # Fetch URL content, following redirects up to MAX_REDIRECTS.
+        # Truncates response bodies exceeding MAX_RESPONSE_BYTES.
+        # @param url [String] URL to fetch
+        # @return [String] response body
+        # @raise [RuntimeError] on too many redirects or missing Location header
         def fetch(url)
           redirects = 0
           current_url = url
@@ -154,6 +177,10 @@ module Nanobot
           end
         end
 
+        # Parse HTML and extract the main text content.
+        # @param html [String] raw HTML response body
+        # @param url [String] original URL (included in output)
+        # @return [String] formatted title, URL, and extracted text
         def parse_content(html, url)
           doc = Nokogiri::HTML(html)
 
