@@ -6,7 +6,8 @@ RSpec.describe Nanobot::Channels::Manager do
   let(:config) { {} }
   let(:bus) { instance_double(Nanobot::Bus::MessageBus) }
   let(:logger) { test_logger }
-  let(:manager) { described_class.new(config: config, bus: bus, logger: logger) }
+  let(:restart_delay) { 5 }
+  let(:manager) { described_class.new(config: config, bus: bus, logger: logger, restart_delay: restart_delay) }
 
   describe '#initialize' do
     it 'initializes with config and bus' do
@@ -40,6 +41,7 @@ RSpec.describe Nanobot::Channels::Manager do
   end
 
   describe '#start_all' do
+    let(:restart_delay) { 0.01 }
     let(:channel) do
       instance_double(
         Nanobot::Channels::BaseChannel,
@@ -110,6 +112,7 @@ RSpec.describe Nanobot::Channels::Manager do
   end
 
   describe '#stop_all' do
+    let(:restart_delay) { 0.01 }
     let(:channel) do
       instance_double(
         Nanobot::Channels::BaseChannel,
@@ -175,6 +178,8 @@ RSpec.describe Nanobot::Channels::Manager do
   end
 
   describe 'channel supervision' do
+    let(:restart_delay) { 0.01 }
+
     it 'restarts crashed channel' do
       call_count = 0
       channel = instance_double(Nanobot::Channels::BaseChannel, name: 'crashing')
@@ -189,7 +194,7 @@ RSpec.describe Nanobot::Channels::Manager do
 
       manager.add_channel(channel)
       manager.start_all
-      sleep 6 # Wait for backoff + restart (5s for first restart)
+      sleep 0.1
       manager.stop_all
 
       expect(call_count).to be >= 2
@@ -210,11 +215,8 @@ RSpec.describe Nanobot::Channels::Manager do
 
       manager.add_channel(channel)
       manager.start_all
-      # max_restarts=3, delays: 5+10+15=30s, but thread will hit all restarts
-      # We need to wait long enough for 3 restarts with backoff
-      # Instead of waiting 30+ seconds, we verify the thread eventually terminates
       threads = manager.instance_variable_get(:@threads)
-      threads.each { |t| t.join(35) }
+      threads.each { |t| t.join(2) }
       manager.stop_all
 
       # 1 initial + 3 restarts = 4 calls total, then gives up

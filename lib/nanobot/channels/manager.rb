@@ -9,12 +9,13 @@ module Nanobot
     class Manager
       attr_reader :channels, :bus, :logger
 
-      def initialize(config:, bus:, logger: nil)
+      def initialize(config:, bus:, logger: nil, restart_delay: 5)
         @config = config
         @bus = bus
         @logger = logger || Logger.new(IO::NULL)
         @channels = {}
         @threads = []
+        @restart_delay = restart_delay
       end
 
       # Add a channel
@@ -35,7 +36,7 @@ module Nanobot
           end
 
           # Start channel in separate thread with supervision
-          thread = start_channel_with_supervision(name, channel)
+          thread = start_channel_with_supervision(name, channel, restart_delay: @restart_delay)
 
           @threads << thread
         end
@@ -89,7 +90,7 @@ module Nanobot
 
       private
 
-      def start_channel_with_supervision(name, channel, max_restarts: 3)
+      def start_channel_with_supervision(name, channel, max_restarts: 3, restart_delay: 5)
         Thread.new do
           restarts = 0
           loop do
@@ -99,7 +100,7 @@ module Nanobot
           rescue StandardError => e
             restarts += 1
             if restarts <= max_restarts
-              delay = 5 * restarts
+              delay = restart_delay * restarts
               @logger.warn "Channel #{name} crashed (#{restarts}/#{max_restarts}), " \
                            "restarting in #{delay}s: #{e.message}"
               sleep delay
