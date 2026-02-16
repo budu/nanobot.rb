@@ -1,6 +1,30 @@
 # Contributing to Nanobot.rb
 
-Thanks for your interest in contributing! This guide covers what you need to get started.
+Thanks for your interest in contributing! This guide covers what you need to
+get started.
+
+## Project Philosophy
+
+Nanobot.rb is a **minimal, educational AI assistant framework**. The current
+feature set is intentionally complete -- contributions should improve what
+exists, not expand the scope.
+
+**What belongs here:**
+- Bug fixes
+- Test coverage improvements
+- Documentation and code clarity
+- Security hardening
+- Performance improvements
+- Reliability and error handling
+
+**What belongs in a fork:**
+- New tools, channels, or provider integrations
+- Streaming, background mode, MCP, RAG, multi-agent orchestration
+- Any feature that adds new capabilities beyond the current scope
+
+If you're building something ambitious, fork the project and go for it. The
+architecture is designed to be extended. See [docs/goals.md](docs/goals.md)
+for more on this.
 
 ## Getting Started
 
@@ -53,15 +77,15 @@ bundle exec rubocop -A
 ```bash
 git checkout main
 git pull upstream main
-git checkout -b feature/your-feature-name
-# or: git checkout -b fix/issue-description
+git checkout -b fix/issue-description
 ```
 
 ### 2. Write Code and Tests
 
 - Follow existing patterns in the codebase
-- Add tests for new functionality
+- Add tests for any changes
 - Keep methods small and focused
+- Prioritize clarity over cleverness
 
 ### 3. Verify Your Changes
 
@@ -73,67 +97,30 @@ bundle exec rubocop
 ### 4. Commit with Conventional Commits
 
 ```bash
-git commit -m "feat: Add weather tool support"
+git commit -m "fix: Handle empty response in agent loop"
 ```
 
 Prefixes: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`
 
+Note: `feat:` should be used sparingly -- most contributions will be fixes,
+refactors, docs, or test improvements.
+
 ### 5. Push and Open a PR
 
 ```bash
-git push origin feature/your-feature-name
+git push origin fix/issue-description
 ```
 
 Then open a Pull Request on GitHub.
 
-## Adding a Custom Tool
-
-Tools extend `RubyLLM::Tool`. Place new tools in `lib/nanobot/agent/tools/` with tests in `spec/agent/tools/`.
-
-```ruby
-class WeatherTool < RubyLLM::Tool
-  description 'Get current weather for a location'
-  param :location, desc: 'City name or coordinates', required: true
-
-  def execute(location:)
-    # Your implementation here
-    "Weather in #{location}: Sunny, 72F"
-  end
-end
-```
-
-## Adding a Custom Channel
-
-Channels extend `Nanobot::Channels::BaseChannel`. Place new channels in `lib/nanobot/channels/` with tests in `spec/channels/`.
-
-```ruby
-class SlackChannel < Nanobot::Channels::BaseChannel
-  def start
-    @client = Slack::Client.new(token: @config['token'])
-
-    @client.on(:message) do |message|
-      handle_message(
-        sender_id: message.user,
-        chat_id: message.channel,
-        content: message.text
-      )
-    end
-
-    @client.start!
-  end
-
-  def stop
-    @client&.stop
-  end
-end
-```
-
 ## Pull Request Guidelines
 
-- Use a conventional commit-style title (e.g., `feat: Add Slack channel`)
+- Use a conventional commit-style title (e.g., `fix: Handle timeout in Exec tool`)
 - Describe what changed and why
 - Ensure all tests pass and RuboCop is clean
-- Keep PRs focused -- one feature or fix per PR
+- Keep PRs focused -- one fix or improvement per PR
+- PRs that add new features or expand scope will likely be declined -- consider
+  a fork instead
 
 ## Reporting Issues
 

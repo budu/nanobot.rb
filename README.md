@@ -2,17 +2,25 @@
 
 [![Ruby](https://img.shields.io/badge/Ruby-4.0%2B-blue)](https://www.ruby-lang.org/)
 
-A Ruby port of [Nanobot](https://github.com/nanobot-ai/nanobot) - a lightweight, modular personal AI assistant framework designed for simplicity, extensibility, and security.
+A minimal, complete personal AI assistant framework. Small enough to read in
+an afternoon, functional enough to use every day, clean enough to fork and
+build on.
 
 ## Overview
 
-Nanobot.rb is a clean, modular AI agent framework that provides a foundation for building intelligent assistants with:
+Nanobot.rb is a Ruby port of [Nanobot](https://github.com/nanobot-ai/nanobot) --
+a personal AI assistant framework designed for simplicity, privacy, and
+readability. It provides the essential building blocks of an AI agent and
+stops there. Major new features belong in forks, not in this codebase.
 
-- 🤖 **Multi-provider LLM support** via RubyLLM (OpenAI, Anthropic, OpenRouter, Groq, etc.)
-- 🔧 **Extensible tool system** with built-in file, shell, and web capabilities
-- 💬 **Multi-channel communication** architecture (extensible for Telegram, Discord, etc.)
-- 💾 **Persistent memory** and conversation session management
-- 🛡️ **Security-first design** with workspace sandboxing and command filtering
+- **Multi-provider LLM support** via RubyLLM (Anthropic, OpenAI, OpenRouter, Groq, DeepSeek)
+- **Built-in tools** -- file operations, shell execution, web search, web fetch
+- **Six channels** -- CLI, Slack, Telegram, Discord, Email, HTTP Gateway
+- **Persistent memory** -- long-term memory and daily notes across sessions
+- **Security-first** -- workspace sandboxing, command filtering, access control
+
+See [docs/goals.md](docs/goals.md) for the project philosophy and
+[docs/use-cases.md](docs/use-cases.md) for detailed usage scenarios.
 
 ## Table of Contents
 
@@ -25,6 +33,7 @@ Nanobot.rb is a clean, modular AI agent framework that provides a foundation for
 - [Security](#security)
 - [Development](#development)
 - [Architecture](#architecture)
+- [Forking and Extending](#forking-and-extending)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -354,15 +363,22 @@ lib/nanobot/
 │   ├── context.rb           # System prompt builder
 │   ├── memory.rb            # Memory management
 │   └── tools/
-│       ├── filesystem.rb    # File operations
-│       ├── shell.rb         # Shell execution
-│       └── web.rb           # Web tools
+│       ├── filesystem.rb    # File operations (read, write, edit, list)
+│       ├── shell.rb         # Shell execution with safety filters
+│       └── web.rb           # Web search and fetch
 ├── bus/
 │   ├── events.rb            # Event definitions
 │   └── message_bus.rb       # Message routing
 ├── channels/
 │   ├── base.rb              # Channel interface
-│   └── manager.rb           # Channel orchestration
+│   ├── manager.rb           # Channel orchestration
+│   ├── slack.rb             # Slack integration
+│   ├── telegram.rb          # Telegram integration
+│   ├── discord.rb           # Discord integration
+│   ├── email.rb             # Email (IMAP/SMTP) integration
+│   └── gateway.rb           # HTTP Gateway
+├── cli/
+│   └── commands.rb          # CLI implementation
 ├── config/
 │   ├── schema.rb            # Configuration schema
 │   └── loader.rb            # Config loading/validation
@@ -371,8 +387,7 @@ lib/nanobot/
 │   └── rubyllm_provider.rb  # RubyLLM integration
 ├── session/
 │   └── manager.rb           # Session persistence
-└── cli/
-    └── commands.rb          # CLI implementation
+└── version.rb               # Version constant
 ```
 
 ## Architecture
@@ -396,9 +411,15 @@ User Input → Channel → Message Bus → Agent Loop → LLM Provider
 - **Context Builder**: System prompt assembly from bootstrap files
 - **Memory Store**: Long-term and daily memory management
 
-### Extending Nanobot
+## Forking and Extending
 
-#### Creating Custom Tools
+Nanobot.rb is designed to be forked. The architecture is modular so you can
+add tools, channels, providers, or entirely new capabilities without fighting
+the codebase.
+
+### Adding Tools
+
+Tools inherit from `RubyLLM::Tool`:
 
 ```ruby
 class WeatherTool < RubyLLM::Tool
@@ -406,56 +427,26 @@ class WeatherTool < RubyLLM::Tool
   param :location, desc: 'City name or coordinates', required: true
 
   def execute(location:)
-    # Your implementation here
     "Weather in #{location}: Sunny, 72F"
   end
 end
 ```
 
-Custom tools are `RubyLLM::Tool` instances passed directly to the agent loop.
+### Adding Channels
 
-#### Creating Custom Channels
+Channels extend `Nanobot::Channels::BaseChannel` and implement `start`,
+`stop`, and `send`.
 
-```ruby
-class SlackChannel < Nanobot::Channels::BaseChannel
-  def start
-    @client = Slack::Client.new(token: @config['token'])
-
-    @client.on(:message) do |message|
-      handle_message(
-        sender_id: message.user,
-        chat_id: message.channel,
-        content: message.text
-      )
-    end
-
-    @client.start!
-  end
-
-  def stop
-    @client&.stop
-  end
-
-  def send(message)
-    @client.post_message(
-      channel: message.chat_id,
-      text: message.content
-    )
-  end
-end
-```
+See [docs/goals.md](docs/goals.md) for what belongs in a fork vs. this repo.
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions that improve what exists are welcome -- bug fixes, test coverage,
+documentation, security hardening, and code clarity. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Areas for Contribution
-
-- Channel implementations (Telegram, Discord, Slack, etc.) using the `BaseChannel` interface
-- New tool development
-- Performance optimizations
-- Documentation improvements
-- Bug fixes and test coverage
+New features that expand the scope (streaming, MCP, RAG, multi-agent, etc.)
+belong in a fork. The architecture is designed to support this.
 
 ## License
 
@@ -469,4 +460,5 @@ This is a Ruby port of the original [Nanobot](https://github.com/nanobot-ai/nano
 
 - **Issues**: [GitHub Issues](https://github.com/nanobot-rb/nanobot.rb/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/nanobot-rb/nanobot.rb/discussions)
-- **Documentation**: [docs/](docs/) directory
+- **Goals**: [docs/goals.md](docs/goals.md)
+- **Use Cases**: [docs/use-cases.md](docs/use-cases.md)
