@@ -210,6 +210,104 @@ module Nanobot
       end
     end
 
+    # Shared recording provider — one instance across all spec files, saved once
+    module Recorder
+      @provider = nil
+
+      def self.provider
+        @provider ||= RecordingProvider.new(build_real_provider)
+      end
+
+      def self.save!
+        return unless @provider
+
+        path = @provider.save_fixture
+        puts "\nRecorded integration fixture: #{path}" # rubocop:disable RSpec/Output
+      end
+
+      def self.build_real_provider
+        config = Nanobot::Config::Loader.load
+        provider_name = Config.provider_name
+        model_name = Config.model_name
+
+        provider_config = config.providers.send(provider_name.to_sym) if
+          config.providers.respond_to?(provider_name.to_sym)
+        api_key = provider_config&.api_key
+        api_base = provider_config&.api_base
+
+        raise "No API key for '#{provider_name}' in ~/.nanobot/config.json" unless api_key
+
+        Providers::RubyLLMProvider.new(
+          api_key: api_key, api_base: api_base,
+          default_model: model_name, provider: provider_name, logger: Logger.new(IO::NULL)
+        )
+      end
+
+      private_class_method :build_real_provider
+    end
+
+    # DSL for wiring shared_examples into record/replay contexts
+    module DSL
+      # Call from inside an RSpec.describe block to add recording and replaying contexts
+      # that invoke the given shared_examples group name.
+      #
+      #   include_scenarios 'conversation scenarios'
+      #
+      def self.include_scenarios(group, shared_examples_name)
+        include_recording_context(group, shared_examples_name)
+        include_replaying_context(group, shared_examples_name)
+      end
+
+      def self.include_recording_context(group, shared_examples_name)
+        group.context 'when recording', if: Config.record_mode? do
+          before(:all) { @provider = Recorder.provider } # rubocop:disable RSpec/BeforeAfterAll
+          before { @workspace = Dir.mktmpdir('nanobot-integration-') }
+          after { FileUtils.rm_rf(@workspace) if @workspace }
+
+          it_behaves_like shared_examples_name,
+                          provider_label: "recording #{Config.provider_name}/#{Config.model_name}"
+        end
+      end
+
+      def self.include_replaying_context(group, shared_examples_name)
+        group.context 'when replaying' do
+          fixtures = Config.fixture_files
+
+          if fixtures.empty?
+            it 'has no recorded fixtures (run with NANOBOT_INTEGRATION_RECORD=true to record)' do
+              pending 'No fixture files found. To record: ' \
+                      'NANOBOT_INTEGRATION_RECORD=true NANOBOT_INTEGRATION_PROVIDER=anthropic ' \
+                      'NANOBOT_INTEGRATION_MODEL=claude-haiku-4-5 bundle exec rspec spec/integration'
+              expect(fixtures).not_to be_empty
+            end
+          end
+
+          fixtures.each do |fixture_path|
+            fixture_label = DSL.fixture_label(fixture_path)
+
+            context "with #{fixture_label}", unless: Config.record_mode? do
+              before(:all) do # rubocop:disable RSpec/BeforeAfterAll
+                @provider = ReplayProvider.new(fixture_path)
+              end
+
+              before { @workspace = Dir.mktmpdir('nanobot-integration-') }
+              after { FileUtils.rm_rf(@workspace) if @workspace }
+
+              it_behaves_like shared_examples_name, provider_label: fixture_label
+            end
+          end
+        end
+      end
+
+      def self.fixture_label(fixture_path)
+        data = JSON.parse(File.read(fixture_path), symbolize_names: true)
+        meta = data[:metadata]
+        "#{meta[:provider]}/#{meta[:model]} (#{File.basename(fixture_path)})"
+      end
+
+      private_class_method :include_recording_context, :include_replaying_context
+    end
+
     # Helper methods available in integration specs
     module Helpers
       def create_integration_agent(provider:, workspace:, schedule_store: nil)
@@ -246,6 +344,11 @@ RSpec.configure do |config|
   # Allow real HTTP connections when recording against a live LLM provider
   config.before(:suite) do
     WebMock.allow_net_connect! if Nanobot::Integration::Config.record_mode?
+  end
+
+  # Save the single recording fixture after all integration specs finish
+  config.after(:suite) do
+    Nanobot::Integration::Recorder.save! if Nanobot::Integration::Config.record_mode?
   end
 
   # Start scenario tracking before each example

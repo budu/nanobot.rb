@@ -78,3 +78,19 @@ RSpec/VerifiedDoubles:
 
 RSpec/VerifiedDoubleReference:
   Enabled: false
+
+# Integration specs use @provider/@workspace instance variables set by
+# before(:all) in the record/replay DSL — no way around it with let.
+RSpec/InstanceVariable:
+  Exclude:
+    - 'spec/integration/**/*'
+
+# Integration specs use string descriptions for use-case categories
+RSpec/DescribeClass:
+  Exclude:
+    - 'spec/integration/**/*'
+
+# The replay loop defines fixture_label in an each block — intentional
+RSpec/LeakyLocalVariable:
+  Exclude:
+    - 'spec/integration/**/*'
