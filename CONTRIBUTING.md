@@ -94,6 +94,40 @@ bundle exec rspec
 bundle exec rubocop
 ```
 
+### Integration Tests
+
+The test suite includes integration tests that verify the full agent loop
+against real LLM responses. These use a **record/replay** approach: responses
+are recorded once from a real provider, saved as fixtures, and replayed in
+subsequent runs for fast, deterministic tests.
+
+Replay mode runs automatically as part of `bundle exec rspec` using the
+fixtures checked into `spec/fixtures/integration_responses/`. No API key is
+needed for replay.
+
+To **record new fixtures** against a live provider:
+
+1. Configure an API key for the provider in `~/.nanobot/config.json`:
+   ```json
+   {
+     "providers": {
+       "anthropic": { "api_key": "sk-ant-..." }
+     }
+   }
+   ```
+
+2. Run with recording enabled:
+   ```bash
+   NANOBOT_INTEGRATION_RECORD=true \
+   NANOBOT_INTEGRATION_PROVIDER=anthropic \
+   NANOBOT_INTEGRATION_MODEL=claude-haiku-4-5 \
+   bundle exec rspec spec/integration
+   ```
+
+This saves a timestamped fixture file in `spec/fixtures/integration_responses/`.
+You can record fixtures for multiple providers and models -- replay mode
+iterates over all saved fixtures automatically.
+
 ### 4. Commit with Conventional Commits
 
 ```bash
