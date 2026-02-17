@@ -8,7 +8,7 @@ build on.
 
 ## Overview
 
-Nanobot.rb is a Ruby port of [Nanobot](https://github.com/nanobot-ai/nanobot) --
+Nanobot.rb is a Ruby port of [Nanobot](https://github.com/HKUDS/nanobot) --
 a personal AI assistant framework designed for simplicity, privacy, and
 readability. It provides the essential building blocks of an AI agent and
 stops there. Major new features belong in forks, not in this codebase.
@@ -454,7 +454,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Credits
 
-This is a Ruby port of the original [Nanobot](https://github.com/nanobot-ai/nanobot) Python project by the Nanobot team. All credit for the original design and architecture goes to them.
+This is a Ruby port of the original [Nanobot](https://github.com/HKUDS/nanobot) Python project by the [Data Intelligence Lab at the University of Hong Kong (HKUDS)](https://github.com/HKUDS). All credit for the original design and architecture goes to them.
 
 ## Support
 

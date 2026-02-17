@@ -604,4 +604,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on contributing to agent d
 - [Architecture Documentation](docs/bootstrap/nanobot_detailed_architecture.md)
 - [Implementation Guide](docs/bootstrap/ruby_port_implementation_guide.md)
 - [Tool Development Guide](docs/bootstrap/quick_reference.md)
-- [Original Python Nanobot](https://github.com/nanobot-ai/nanobot)
+- [Original Python Nanobot](https://github.com/HKUDS/nanobot)
