@@ -13,7 +13,7 @@ a personal AI assistant framework designed for simplicity, privacy, and
 readability. It provides the essential building blocks of an AI agent and
 stops there. Major new features belong in forks, not in this codebase.
 
-- **Multi-provider LLM support** via RubyLLM (Anthropic, OpenAI, OpenRouter, Groq, DeepSeek)
+- **Multi-provider LLM support** via [RubyLLM](https://rubyllm.com/) -- Anthropic, OpenAI, Gemini, DeepSeek, Ollama, OpenRouter, and [many more](https://rubyllm.com/available-models/)
 - **Built-in tools** -- file operations, shell execution, web search, web fetch
 - **Task scheduling** -- one-shot reminders, recurring intervals, and cron expressions
 - **Six channels** -- CLI, Slack, Telegram, Discord, Email, HTTP Gateway
@@ -91,10 +91,25 @@ Edit `~/.nanobot/config.json` and add your API keys:
     },
     "openai": {
       "api_key": "sk-..."
+    },
+    "gemini": {
+      "api_key": "AIza..."
+    },
+    "deepseek": {
+      "api_key": "sk-..."
+    },
+    "ollama": {
+      "api_base": "http://localhost:11434"
+    },
+    "openrouter": {
+      "api_key": "sk-or-v1-..."
     }
   }
 }
 ```
+
+You only need to configure the providers you plan to use. For the full list
+of supported providers and models, see [RubyLLM Available Models](https://rubyllm.com/available-models/).
 
 ### 3. Start Chatting
 
