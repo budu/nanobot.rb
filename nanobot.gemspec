@@ -28,6 +28,7 @@ Gem::Specification.new do |spec|
 
   # Runtime dependencies
   spec.add_dependency 'faraday', '~> 2.7'
+  spec.add_dependency 'fugit', '~> 1.8'
   spec.add_dependency 'json', '~> 2.6'
   spec.add_dependency 'logger', '~> 1.5'
   spec.add_dependency 'nokogiri', '~> 1.15'

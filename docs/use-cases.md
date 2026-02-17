@@ -105,6 +105,26 @@ auto-created as YYYY-MM-DD.md files. Persistent JSONL sessions give
 continuity within conversations. The context builder includes memory in
 every system prompt.
 
+### Scheduled Tasks and Reminders
+
+Let the assistant act on its own schedule without waiting for a prompt:
+
+- Set reminders: "Remind me to call John in 30 minutes"
+- Recurring reports: "Every morning at 8am, summarize my calendar"
+- Periodic monitoring: "Every hour, check the server status page and alert me if anything is down"
+- Daily routines: "At 5pm every weekday, write a summary of today's notes to memory"
+- One-shot timers: "In 2 hours, search for the latest news on the product launch"
+
+**How it works**: Three schedule tools (ScheduleAdd, ScheduleList, ScheduleRemove)
+let the agent create and manage timed tasks. The SchedulerService runs a
+background thread that checks for due schedules every 15 seconds. When a
+schedule fires, it publishes a synthetic message to the message bus -- the
+agent processes it like any other message, with full access to all its tools.
+Schedules support three kinds: one-time timestamps (`at`), recurring intervals
+(`every`), and cron expressions (`cron`) with timezone support. Responses can
+be routed to a specific channel (e.g., deliver the reminder to Slack). Schedules
+persist as JSON and survive restarts.
+
 ### Multi-Platform Communication
 
 Deploy the same assistant across multiple channels:
@@ -175,13 +195,14 @@ Here's what fits the current scope and what would require a fork:
 | HTTP API | REST gateway with auth |
 | Customizable personality | Bootstrap files (AGENTS.md, SOUL.md, USER.md, IDENTITY.md) |
 | Web access | Search (Brave API) and page fetching |
+| Task scheduling | One-time, recurring, and cron-based scheduled tasks |
 
 ### Beyond scope (fork territory)
 
 | Capability | Why it's a fork |
 |-----------|----------------|
 | Streaming responses | Changes the response model across all channels |
-| Background/daemon mode | Adds process management, scheduling, and lifecycle concerns |
+| Background/daemon mode | Adds process management and lifecycle concerns |
 | MCP support | New protocol layer and tool discovery system |
 | RAG / vector stores | New dependency, indexing pipeline, and retrieval logic |
 | Multi-agent orchestration | Agent-to-agent communication and task delegation |

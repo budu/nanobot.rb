@@ -8,6 +8,7 @@ SimpleCov.start do
   add_group 'Agent', 'lib/nanobot/agent'
   add_group 'Bus', 'lib/nanobot/bus'
   add_group 'Channels', 'lib/nanobot/channels'
+  add_group 'Scheduler', 'lib/nanobot/scheduler'
   add_group 'Tools', 'lib/nanobot/agent/tools'
   minimum_coverage 90
 

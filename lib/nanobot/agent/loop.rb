@@ -21,7 +21,8 @@ module Nanobot
       #   :brave_api_key [String] Brave search API key,
       #   :exec_config [Hash] shell exec configuration,
       #   :restrict_to_workspace [Boolean] restrict file tools to workspace,
-      #   :confirm_tool_call [Proc] callback to confirm tool execution
+      #   :confirm_tool_call [Proc] callback to confirm tool execution,
+      #   :schedule_store [Scheduler::ScheduleStore] schedule store for scheduling tools
       def initialize(bus:, provider:, workspace:, logger: nil, **opts)
         @bus = bus
         @provider = provider
@@ -32,6 +33,7 @@ module Nanobot
         @exec_config = opts[:exec_config] || {}
         @restrict_to_workspace = opts[:restrict_to_workspace] || false
         @confirm_tool_call = opts[:confirm_tool_call]
+        @schedule_store = opts[:schedule_store]
         @logger = logger || Logger.new(IO::NULL)
 
         @context = ContextBuilder.new(@workspace, logger: @logger)
@@ -274,8 +276,12 @@ module Nanobot
         @tool_instances << Tools::WebSearch.new(api_key: @brave_api_key) if @brave_api_key
         @tool_instances << Tools::WebFetch.new
 
-        # Keep old registry for compatibility (for now we skip MessageTool)
-        # @tools.register(Tools::MessageTool.new(bus: @bus))
+        if @schedule_store
+          require_relative 'tools/schedule'
+          @tool_instances << Tools::ScheduleAdd.new(store: @schedule_store)
+          @tool_instances << Tools::ScheduleList.new(store: @schedule_store)
+          @tool_instances << Tools::ScheduleRemove.new(store: @schedule_store)
+        end
 
         @logger.info "Registered #{@tool_instances.length} RubyLLM tools"
       end

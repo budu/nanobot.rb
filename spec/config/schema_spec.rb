@@ -132,6 +132,20 @@ RSpec.describe Nanobot::Config do
     end
   end
 
+  describe 'SchedulerConfig' do
+    it 'initializes with defaults' do
+      config = Nanobot::Config::SchedulerConfig.new
+      expect(config.enabled).to be true
+      expect(config.tick_interval).to eq(15)
+    end
+
+    it 'accepts custom values' do
+      config = Nanobot::Config::SchedulerConfig.new(enabled: false, tick_interval: 30)
+      expect(config.enabled).to be false
+      expect(config.tick_interval).to eq(30)
+    end
+  end
+
   describe 'Config' do
     it 'initializes with defaults' do
       config = Nanobot::Config::Config.new
@@ -139,6 +153,7 @@ RSpec.describe Nanobot::Config do
       expect(config.provider).to eq('anthropic')
       expect(config.agents).to be_a(Nanobot::Config::AgentsConfig)
       expect(config.tools).to be_a(Nanobot::Config::ToolsConfig)
+      expect(config.scheduler).to be_a(Nanobot::Config::SchedulerConfig)
     end
 
     it 'accepts nested configurations' do

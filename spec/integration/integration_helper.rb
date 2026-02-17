@@ -212,7 +212,7 @@ module Nanobot
 
     # Helper methods available in integration specs
     module Helpers
-      def create_integration_agent(provider:, workspace:)
+      def create_integration_agent(provider:, workspace:, schedule_store: nil)
         @integration_chat_id = "integration-#{SecureRandom.hex(8)}"
         provider.current_workspace = workspace if provider.respond_to?(:current_workspace=)
         bus = Bus::MessageBus.new(logger: test_logger)
@@ -223,6 +223,7 @@ module Nanobot
           model: provider.default_model,
           max_iterations: 10,
           restrict_to_workspace: true,
+          schedule_store: schedule_store,
           logger: test_logger
         )
       end
@@ -251,6 +252,11 @@ RSpec.configure do |config|
   config.before(:each, :integration) do |example|
     scenario_key = example.metadata[:scenario]
     next unless scenario_key
+
+    # Skip scenarios not present in the replay fixture
+    if @provider.respond_to?(:scenario?) && !@provider.scenario?(scenario_key.to_s)
+      skip "Scenario '#{scenario_key}' not recorded in fixture (re-record to include)"
+    end
 
     @provider.start_scenario(scenario_key.to_s) if @provider.respond_to?(:start_scenario)
   end

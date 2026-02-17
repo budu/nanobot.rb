@@ -80,6 +80,45 @@ RSpec.describe 'Agent comprehension', :integration do
       end
     end
 
+    describe 'tool use: schedule' do
+      let(:schedule_store_path) { File.join(@workspace, 'schedules.json') }
+      let(:schedule_store) { Nanobot::Scheduler::ScheduleStore.new(path: schedule_store_path) }
+      let(:scheduling_agent) do
+        create_integration_agent(provider: @provider, workspace: @workspace, schedule_store: schedule_store)
+      end
+
+      it "creates a schedule when asked [#{provider_label}]", scenario: :tool_schedule_add do
+        response = scheduling_agent.process_direct(
+          'Set a reminder for 30 minutes from now to check my email. ' \
+          'Use the schedule_add tool with kind "every" and expression "30m".',
+          chat_id: @integration_chat_id
+        )
+        expect(response).to be_a(String)
+        expect(schedule_store.list.size).to eq(1)
+        expect(schedule_store.list.first.kind).to eq('every')
+        expect(schedule_store.list.first.expression).to eq('30m')
+      end
+
+      it "lists schedules when asked [#{provider_label}]", scenario: :tool_schedule_list do
+        schedule_store.add(kind: 'cron', expression: '0 9 * * *', prompt: 'morning standup reminder')
+        response = scheduling_agent.process_direct(
+          'List all my scheduled tasks.',
+          chat_id: @integration_chat_id
+        )
+        expect(response).to include('morning standup')
+      end
+
+      it "removes a schedule when asked [#{provider_label}]", scenario: :tool_schedule_remove do
+        schedule = schedule_store.add(kind: 'every', expression: '2h', prompt: 'check server status')
+        short_id = schedule.id[0..7]
+        scheduling_agent.process_direct(
+          "Remove the scheduled task with ID #{short_id}.",
+          chat_id: @integration_chat_id
+        )
+        expect(schedule_store.list).to be_empty
+      end
+    end
+
     describe 'multi-turn conversation' do
       it "maintains context across turns [#{provider_label}]", scenario: :multi_turn do
         agent_send('Remember this code: ALPHA-9923. I will ask about it later.')

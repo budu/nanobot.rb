@@ -13,6 +13,8 @@ require_relative 'nanobot/config/schema'
 require_relative 'nanobot/config/loader'
 require_relative 'nanobot/channels/base'
 require_relative 'nanobot/channels/manager'
+require_relative 'nanobot/scheduler/store'
+require_relative 'nanobot/scheduler/service'
 
 # Multi-channel AI chatbot framework powered by RubyLLM
 module Nanobot

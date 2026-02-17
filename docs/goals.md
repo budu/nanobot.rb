@@ -40,6 +40,7 @@ control, and private IP blocking are built in, not bolted on.
 - Multi-provider LLM support via RubyLLM (Anthropic, OpenAI, OpenRouter, Groq, DeepSeek)
 - Agent loop with tool calling (up to 20 iterations)
 - Built-in tools: file operations, shell execution, web search, web fetch
+- Task scheduling: one-time, recurring, and cron-based scheduled tasks
 - Six channels: CLI, Slack, Telegram, Discord, Email, HTTP Gateway
 - Persistent sessions via JSONL
 - Dual memory system (long-term + daily notes)
@@ -66,7 +67,7 @@ Improvements that fit the minimal philosophy:
 Features that expand the scope beyond a minimal core:
 
 - Streaming responses
-- Background/daemon mode and scheduled tasks
+- Background/daemon mode
 - MCP client support
 - RAG and vector store integration
 - Multi-agent orchestration

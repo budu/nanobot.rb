@@ -48,14 +48,28 @@ module Nanobot
       method_option :debug, aliases: '-d', type: :boolean, default: false, desc: 'Enable verbose debug logging'
       def serve
         config, bus, logger = load_runtime(debug: options[:debug])
-        agent_loop = build_agent_loop_from(config, bus, logger)
+
+        # Initialize scheduler
+        schedule_store = Scheduler::ScheduleStore.new
+        scheduler_service = nil
+        if config.scheduler.enabled
+          scheduler_service = Scheduler::SchedulerService.new(
+            store: schedule_store, bus: bus, logger: logger,
+            tick_interval: config.scheduler.tick_interval
+          )
+        end
+
+        agent_loop = build_agent_loop_from(config, bus, logger, schedule_store: schedule_store)
 
         require_relative '../channels/manager'
         manager = Channels::Manager.new(config: config, bus: bus, logger: logger)
         register_channels(manager, config, bus, logger)
         manager.start_all
 
-        setup_signal_traps(manager, agent_loop, logger)
+        # Start scheduler after channels so response routing has subscribers
+        scheduler_service&.start
+
+        setup_signal_traps(manager, agent_loop, logger, scheduler_service: scheduler_service)
 
         puts 'Nanobot service started. Press Ctrl+C to stop.'
         agent_loop.run
@@ -221,8 +235,9 @@ module Nanobot
       # @param config [Config] application configuration
       # @param bus [Bus::MessageBus] message bus
       # @param logger [Logger] logger instance
+      # @param schedule_store [Scheduler::ScheduleStore, nil] schedule store for scheduling tools
       # @return [Agent::Loop]
-      def build_agent_loop_from(config, bus, logger)
+      def build_agent_loop_from(config, bus, logger, schedule_store: nil)
         provider = create_provider(config, nil, logger: logger)
         workspace = require_workspace!(config)
 
@@ -232,6 +247,7 @@ module Nanobot
           brave_api_key: config.tools.web.search.api_key,
           exec_config: { timeout: config.tools.exec.timeout },
           restrict_to_workspace: config.tools.restrict_to_workspace,
+          schedule_store: schedule_store,
           logger: logger
         )
       end
@@ -273,10 +289,12 @@ module Nanobot
       # @param manager [Channels::Manager] channel manager to stop
       # @param agent_loop [Agent::Loop] agent loop to stop
       # @param logger [Logger] logger instance
-      def setup_signal_traps(manager, agent_loop, logger)
+      # @param scheduler_service [Scheduler::SchedulerService, nil] scheduler to stop
+      def setup_signal_traps(manager, agent_loop, logger, scheduler_service: nil)
         %w[INT TERM].each do |signal|
           trap(signal) do
             logger.info "Received #{signal} signal, shutting down..."
+            scheduler_service&.stop
             manager.stop_all
             agent_loop.stop
           end

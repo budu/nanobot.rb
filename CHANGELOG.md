@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Task scheduling with three schedule kinds: one-shot `at` (ISO 8601), recurring `every` (duration), and `cron` (cron expressions with optional timezone)
+- Schedule tools for the LLM: `schedule_add`, `schedule_list`, `schedule_remove`
+- Background scheduler service with configurable tick interval
+- Response routing to deliver scheduled task results to a target channel
+- JSON persistence for schedules at `~/.nanobot/schedules.json`
+- `fugit` dependency for cron/duration/timestamp parsing
+
 ## [0.1.0] - 2026-02-14
 
 ### Added

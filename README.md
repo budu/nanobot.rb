@@ -15,6 +15,7 @@ stops there. Major new features belong in forks, not in this codebase.
 
 - **Multi-provider LLM support** via RubyLLM (Anthropic, OpenAI, OpenRouter, Groq, DeepSeek)
 - **Built-in tools** -- file operations, shell execution, web search, web fetch
+- **Task scheduling** -- one-shot reminders, recurring intervals, and cron expressions
 - **Six channels** -- CLI, Slack, Telegram, Discord, Email, HTTP Gateway
 - **Persistent memory** -- long-term memory and daily notes across sessions
 - **Security-first** -- workspace sandboxing, command filtering, access control
@@ -162,6 +163,8 @@ Configuration is stored in `~/.nanobot/config.json`:
 |                    | `max_tool_iterations`  | Max tool execution cycles           | `20`                     |
 | `tools`            | `restrict_to_workspace`| Sandbox file/shell operations       | `false`                  |
 | `tools.exec`       | `timeout`              | Command execution timeout (seconds) | `60`                     |
+| `scheduler`        | `enabled`              | Enable task scheduling              | `true`                   |
+|                    | `tick_interval`        | Seconds between schedule checks     | `15`                     |
 
 ## Usage
 
@@ -252,6 +255,23 @@ Nanobot uses **RubyLLM-native tools** that inherit from `RubyLLM::Tool` for seam
   - Extracts main content from HTML
   - Removes scripts and styles
   - Returns title, URL, and cleaned text
+
+### Task Scheduling
+
+- **ScheduleAdd** - Create scheduled tasks
+  - One-shot `at` (ISO 8601 timestamp): "remind me at 3:30pm"
+  - Recurring `every` (duration): "check every 30 minutes"
+  - Cron expressions: "every weekday at 9am" (`0 9 * * 1-5`)
+  - Optional timezone and delivery target (channel + chat)
+
+- **ScheduleList** - List all scheduled tasks with status and next run time
+
+- **ScheduleRemove** - Remove a scheduled task by full or partial ID
+
+Schedules fire by publishing synthetic messages to the message bus, so the
+agent loop processes them like any other message. Results can be routed to a
+specific channel (e.g., Slack) via the `deliver_to` option. Schedule tools
+are only available in `serve` mode where the background scheduler is running.
 
 ### Tool Architecture
 
@@ -364,6 +384,7 @@ lib/nanobot/
 │   ├── memory.rb            # Memory management
 │   └── tools/
 │       ├── filesystem.rb    # File operations (read, write, edit, list)
+│       ├── schedule.rb      # Task scheduling (add, list, remove)
 │       ├── shell.rb         # Shell execution with safety filters
 │       └── web.rb           # Web search and fetch
 ├── bus/
@@ -385,6 +406,9 @@ lib/nanobot/
 ├── providers/
 │   ├── base.rb              # Provider interface
 │   └── rubyllm_provider.rb  # RubyLLM integration
+├── scheduler/
+│   ├── store.rb             # Schedule CRUD and JSON persistence
+│   └── service.rb           # Background tick thread, fires due jobs
 ├── session/
 │   └── manager.rb           # Session persistence
 └── version.rb               # Version constant

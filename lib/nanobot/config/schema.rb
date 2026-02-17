@@ -238,21 +238,34 @@ module Nanobot
       end
     end
 
+    # Scheduler service configuration
+    SchedulerConfig = Struct.new(:enabled, :tick_interval, keyword_init: true) do
+      # @param enabled [Boolean] whether the scheduler service is active
+      # @param tick_interval [Integer] seconds between schedule evaluation ticks
+      def initialize(enabled: true, tick_interval: 15)
+        super
+      end
+    end
+
     # Root configuration object holding all Nanobot settings
-    Config = Struct.new(:providers, :provider, :agents, :tools, :channels, keyword_init: true) do
+    Config = Struct.new(:providers, :provider, :agents, :tools, :channels, :scheduler, keyword_init: true) do
       # @param providers [Hash] provider credentials (see ProvidersConfig)
       # @param provider [String] name of the active provider (e.g. "anthropic", "openai")
       # @param agents [Hash] agent settings (see AgentsConfig)
       # @param tools [Hash] tool settings (see ToolsConfig)
       # @param channels [Hash] channel settings (see ChannelsConfig)
-      def initialize(providers: {}, provider: 'anthropic', agents: {}, tools: {}, channels: {}, **_rest)
+      # @param scheduler [Hash] scheduler settings (see SchedulerConfig)
+      def initialize(providers: {}, provider: 'anthropic', agents: {}, tools: {}, channels: {}, scheduler: {},
+                     **_rest)
         channels_config = channels.is_a?(Hash) ? channels : {}
+        scheduler_config = scheduler.is_a?(Hash) ? scheduler : {}
         super(
           providers: ProvidersConfig.new(**providers),
           provider: provider.to_s,
           agents: AgentsConfig.new(**agents),
           tools: ToolsConfig.new(**tools),
-          channels: ChannelsConfig.new(**channels_config)
+          channels: ChannelsConfig.new(**channels_config),
+          scheduler: SchedulerConfig.new(**scheduler_config)
         )
       end
 

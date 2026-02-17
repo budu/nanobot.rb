@@ -5,6 +5,7 @@ source 'https://rubygems.org'
 ruby '~> 4.0.1'
 
 gem 'faraday', '~> 2.7' # HTTP & Network
+gem 'fugit', '~> 1.8' # Cron/duration/timestamp parsing
 gem 'json', '~> 2.6' # JSON & Serialization
 gem 'logger', '~> 1.5' # Logging
 gem 'nokogiri', '~> 1.15' # Web parsing

@@ -82,6 +82,27 @@ RSpec.describe Nanobot::Agent::Loop do
       )
       expect(loop_restricted).to be_a(described_class)
     end
+
+    it 'registers schedule tools when schedule_store is provided' do
+      allow(provider).to receive(:default_model).and_return('test-model')
+      store = Nanobot::Scheduler::ScheduleStore.new(path: File.join(workspace, 'schedules.json'))
+      loop_with_schedule = described_class.new(
+        bus: bus,
+        provider: provider,
+        workspace: workspace,
+        schedule_store: store,
+        logger: logger
+      )
+      tool_names = loop_with_schedule.instance_variable_get(:@tool_instances).map(&:name)
+      expect(tool_names.any? { |n| n.include?('schedule_add') }).to be true
+      expect(tool_names.any? { |n| n.include?('schedule_list') }).to be true
+      expect(tool_names.any? { |n| n.include?('schedule_remove') }).to be true
+    end
+
+    it 'does not register schedule tools when schedule_store is not provided' do
+      tool_names = agent_loop.instance_variable_get(:@tool_instances).map(&:name)
+      expect(tool_names.none? { |n| n.include?('schedule_add') }).to be true
+    end
   end
 
   describe '#process_direct' do
