@@ -3,7 +3,7 @@
 module Nanobot
   module Providers
     # ToolCallRequest represents a tool call from the LLM
-    ToolCallRequest = Struct.new(:id, :name, :arguments, keyword_init: true)
+    ToolCallRequest = Struct.new(:id, :name, :arguments, :thought_signature, keyword_init: true)
 
     # LLMResponse represents the response from an LLM
     LLMResponse = Struct.new(:content, :tool_calls, :finish_reason, keyword_init: true) do

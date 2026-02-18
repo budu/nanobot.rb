@@ -194,7 +194,9 @@ module Nanobot
       # @return [Array<Hash>] serialized tool calls
       def serialize_tool_calls(tool_calls)
         tool_calls.map do |tc|
-          { id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.generate(tc.arguments) } }
+          hash = { id: tc.id, type: 'function', function: { name: tc.name, arguments: JSON.generate(tc.arguments) } }
+          hash[:thought_signature] = tc.thought_signature if tc.respond_to?(:thought_signature) && tc.thought_signature
+          hash
         end
       end
 

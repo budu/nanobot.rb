@@ -240,7 +240,8 @@ module Nanobot
           tool_call_obj = ToolCallProxy.new(
             tool_call_id,
             func['name'] || func[:name],
-            parsed_args
+            parsed_args,
+            tc['thought_signature'] || tc[:thought_signature]
           )
 
           hash[tool_call_id] = tool_call_obj
