@@ -51,7 +51,7 @@ RSpec.describe Nanobot::CLI::Commands do
         expect(output).to include('Model: claude-haiku-4-5')
         expect(output).to include('Anthropic: configured')
         expect(output).to include('OpenAI: configured')
-        expect(output).to include('OpenRouter: not configured')
+        expect(output).not_to include('OpenRouter')
         expect(output).to include('Active provider: anthropic')
       end
     end

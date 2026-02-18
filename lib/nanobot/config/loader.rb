@@ -111,10 +111,7 @@ module Nanobot
         # @return [Hash]
         def providers_to_hash(providers)
           hash = {}
-          %i[openrouter anthropic openai deepseek groq].each do |key|
-            provider = providers.send(key)
-            next unless provider
-
+          providers.each do |key, provider|
             hash[key] = {
               api_key: provider.api_key,
               api_base: provider.api_base,

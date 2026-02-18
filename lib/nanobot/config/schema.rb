@@ -14,28 +14,37 @@ module Nanobot
       end
     end
 
-    # Collection of all supported LLM provider configurations
-    ProvidersConfig = Struct.new(
-      :openrouter,
-      :anthropic,
-      :openai,
-      :deepseek,
-      :groq,
-      keyword_init: true
-    ) do
-      # @param openrouter [Hash, nil] OpenRouter provider settings
-      # @param anthropic [Hash, nil] Anthropic provider settings
-      # @param openai [Hash, nil] OpenAI provider settings
-      # @param deepseek [Hash, nil] DeepSeek provider settings
-      # @param groq [Hash, nil] Groq provider settings
+    # Collection of LLM provider configurations, keyed by provider name.
+    # Accepts any provider name so new RubyLLM backends work without code changes.
+    class ProvidersConfig
+      # @param kwargs [Hash] provider name => settings hash pairs
       def initialize(**kwargs)
-        super(
-          openrouter: kwargs[:openrouter] ? ProviderConfig.new(**kwargs[:openrouter]) : nil,
-          anthropic: kwargs[:anthropic] ? ProviderConfig.new(**kwargs[:anthropic]) : nil,
-          openai: kwargs[:openai] ? ProviderConfig.new(**kwargs[:openai]) : nil,
-          deepseek: kwargs[:deepseek] ? ProviderConfig.new(**kwargs[:deepseek]) : nil,
-          groq: kwargs[:groq] ? ProviderConfig.new(**kwargs[:groq]) : nil
-        )
+        @providers = {}
+        kwargs.each do |key, value|
+          @providers[key.to_sym] = value.is_a?(ProviderConfig) ? value : ProviderConfig.new(**value)
+        end
+      end
+
+      # Iterate over all configured providers
+      # @yieldparam key [Symbol] provider name
+      # @yieldparam config [ProviderConfig] provider configuration
+      def each(&)
+        @providers.each(&)
+      end
+
+      # @return [Boolean] true when no providers are configured
+      def empty?
+        @providers.empty?
+      end
+
+      def respond_to_missing?(_name, _include_private = false)
+        true
+      end
+
+      def method_missing(name, *args)
+        return super if name.end_with?('=') || !args.empty?
+
+        @providers[name.to_sym]
       end
     end
 

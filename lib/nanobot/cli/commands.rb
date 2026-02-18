@@ -102,8 +102,14 @@ module Nanobot
         email: 'Email'
       }.freeze
 
-      # Display names for supported LLM providers.
-      PROVIDER_NAMES = { 'openrouter' => 'OpenRouter', 'anthropic' => 'Anthropic', 'openai' => 'OpenAI' }.freeze
+      # Display names for known LLM providers.
+      PROVIDER_NAMES = {
+        'anthropic' => 'Anthropic', 'openai' => 'OpenAI', 'gemini' => 'Gemini',
+        'deepseek' => 'DeepSeek', 'openrouter' => 'OpenRouter', 'mistral' => 'Mistral',
+        'ollama' => 'Ollama', 'perplexity' => 'Perplexity', 'xai' => 'xAI',
+        'gpustack' => 'GPUStack', 'bedrock' => 'Bedrock', 'vertexai' => 'VertexAI',
+        'groq' => 'Groq'
+      }.freeze
 
       # Default workspace files created during onboarding.
       BOOTSTRAP_FILES = {
@@ -340,10 +346,10 @@ module Nanobot
         puts "Model: #{config.agents.defaults.model}"
 
         puts "\nProviders:"
-        PROVIDER_NAMES.each do |key, display_name|
-          provider = config.providers.send(key)
-          status = provider&.api_key ? 'configured' : 'not configured'
-          puts "  #{display_name}: #{status}"
+        config.providers.each do |key, provider|
+          display = PROVIDER_NAMES.fetch(key.to_s, key.to_s)
+          status = provider&.api_key || provider&.api_base ? 'configured' : 'not configured'
+          puts "  #{display}: #{status}"
         end
         puts "\nActive provider: #{config.provider}"
 

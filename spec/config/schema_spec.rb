@@ -25,13 +25,9 @@ RSpec.describe Nanobot::Config do
   end
 
   describe 'ProvidersConfig' do
-    it 'initializes with defaults' do
+    it 'initializes empty by default' do
       config = Nanobot::Config::ProvidersConfig.new
-      expect(config.openrouter).to be_nil
-      expect(config.anthropic).to be_nil
-      expect(config.openai).to be_nil
-      expect(config.deepseek).to be_nil
-      expect(config.groq).to be_nil
+      expect(config).to be_empty
     end
 
     it 'accepts provider configurations' do
@@ -42,6 +38,31 @@ RSpec.describe Nanobot::Config do
 
       expect(config.openai.api_key).to eq('openai-key')
       expect(config.anthropic.api_key).to eq('anthropic-key')
+    end
+
+    it 'accepts any provider name' do
+      config = Nanobot::Config::ProvidersConfig.new(
+        gemini: { api_key: 'gemini-key' },
+        ollama: { api_base: 'http://localhost:11434' }
+      )
+
+      expect(config.gemini.api_key).to eq('gemini-key')
+      expect(config.ollama.api_base).to eq('http://localhost:11434')
+    end
+
+    it 'returns nil for unconfigured providers' do
+      config = Nanobot::Config::ProvidersConfig.new(openai: { api_key: 'key' })
+      expect(config.anthropic).to be_nil
+    end
+
+    it 'iterates over configured providers' do
+      config = Nanobot::Config::ProvidersConfig.new(
+        openai: { api_key: 'a' },
+        gemini: { api_key: 'b' }
+      )
+      collected = {}
+      config.each { |k, v| collected[k] = v.api_key }
+      expect(collected).to eq(openai: 'a', gemini: 'b')
     end
   end
 

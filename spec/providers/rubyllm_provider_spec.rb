@@ -122,13 +122,12 @@ RSpec.describe Nanobot::Providers::RubyLLMProvider do
         end.not_to raise_error
       end
 
-      it 'falls back to OpenAI config for unknown provider' do
-        allow(logger).to receive(:warn)
+      it 'silently skips config for unknown provider' do
         allow(logger).to receive(:debug)
 
-        described_class.new(api_key: 'sk-test', provider: 'custom_llm', logger: logger)
-
-        expect(logger).to have_received(:warn).with(match(/Unknown provider 'custom_llm'/))
+        expect do
+          described_class.new(api_key: 'sk-test', provider: 'custom_llm', logger: logger)
+        end.not_to raise_error
       end
     end
 

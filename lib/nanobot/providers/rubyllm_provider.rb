@@ -7,10 +7,37 @@ require_relative 'base'
 module Nanobot
   module Providers
     # LLM provider implementation backed by the RubyLLM gem.
-    # Supports Anthropic, OpenAI, DeepSeek, Groq, and OpenRouter backends.
+    # Supports all RubyLLM backends (Anthropic, OpenAI, Gemini, DeepSeek,
+    # OpenRouter, Mistral, Perplexity, xAI, Ollama, GPUStack, Bedrock, etc.).
     class RubyLLMProvider < LLMProvider
       # Lightweight struct for replaying tool calls through RubyLLM message history.
-      ToolCallProxy = Struct.new(:id, :name, :arguments)
+      # Includes thought_signature for Gemini provider compatibility.
+      ToolCallProxy = Struct.new(:id, :name, :arguments, :thought_signature)
+
+      # Maps nanobot provider names to their RubyLLM api_key config attribute.
+      # Providers not listed here (or mapped to nil) have no api_key setting.
+      PROVIDER_KEY_MAP = {
+        'anthropic' => :anthropic_api_key,
+        'openai' => :openai_api_key,
+        'gemini' => :gemini_api_key,
+        'deepseek' => :deepseek_api_key,
+        'openrouter' => :openrouter_api_key,
+        'mistral' => :mistral_api_key,
+        'perplexity' => :perplexity_api_key,
+        'xai' => :xai_api_key,
+        'gpustack' => :gpustack_api_key,
+        'bedrock' => :bedrock_api_key,
+        'groq' => :openai_api_key
+      }.freeze
+
+      # Maps nanobot provider names to their RubyLLM api_base config attribute.
+      # Only providers that support a custom base URL are listed.
+      PROVIDER_BASE_MAP = {
+        'openai' => :openai_api_base,
+        'gemini' => :gemini_api_base,
+        'ollama' => :ollama_api_base,
+        'gpustack' => :gpustack_api_base
+      }.freeze
 
       attr_reader :logger, :default_model
 
@@ -164,22 +191,14 @@ module Nanobot
         tools_hash
       end
 
-      # Configure the RubyLLM client with the appropriate API key for the provider.
+      # Configure the RubyLLM client with the appropriate API key and base URL for the provider.
       def configure_client
-        return unless @api_key
-
         RubyLLM.configure do |config|
-          case @provider
-          when 'anthropic'
-            config.anthropic_api_key = @api_key
-          when 'openai', 'deepseek', 'groq'
-            config.openai_api_key = @api_key
-          when 'openrouter'
-            config.openrouter_api_key = @api_key
-          else
-            @logger.warn "Unknown provider '#{@provider}', defaulting to OpenAI-compatible config"
-            config.openai_api_key = @api_key
-          end
+          key_attr = PROVIDER_KEY_MAP[@provider]
+          config.send(:"#{key_attr}=", @api_key) if key_attr && @api_key
+
+          base_attr = PROVIDER_BASE_MAP[@provider]
+          config.send(:"#{base_attr}=", @api_base) if base_attr && @api_base
         end
 
         @logger.debug "Configured RubyLLM for provider: #{@provider}"
@@ -195,7 +214,8 @@ module Nanobot
           ToolCallRequest.new(
             id: tool_call.id,
             name: tool_call.name,
-            arguments: tool_call.arguments
+            arguments: tool_call.arguments,
+            thought_signature: tool_call.respond_to?(:thought_signature) ? tool_call.thought_signature : nil
           )
         end
       end
