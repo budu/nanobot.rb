@@ -64,11 +64,24 @@ module Nanobot
         @current_scenario = nil
       end
 
+      MAX_RETRIES = 5
+      RETRY_BASE_DELAY = 2 # seconds
+
       def chat(messages:, tools: nil, model: nil, max_tokens: 4096, temperature: 0.7)
-        response = @real_provider.chat(
-          messages: messages, tools: tools, model: model,
-          max_tokens: max_tokens, temperature: temperature
-        )
+        response = nil
+
+        MAX_RETRIES.times do |attempt|
+          response = @real_provider.chat(
+            messages: messages, tools: tools, model: model,
+            max_tokens: max_tokens, temperature: temperature
+          )
+
+          break unless response.content&.match?(/rate limit|quota/i)
+
+          delay = RETRY_BASE_DELAY * (2**attempt)
+          warn "Rate limited (attempt #{attempt + 1}/#{MAX_RETRIES}), retrying in #{delay}s..."
+          sleep delay
+        end
 
         @scenarios[@current_scenario] << serialize_response(response) if @current_scenario
 
