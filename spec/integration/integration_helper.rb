@@ -270,7 +270,7 @@ module Nanobot
       end
 
       def self.include_replaying_context(group, shared_examples_name)
-        group.context 'when replaying' do
+        group.context 'when replaying', unless: Config.record_mode? do
           fixtures = Config.fixture_files
 
           if fixtures.empty?
