@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# Record integration test fixtures against live LLM providers.
+# Requires API keys configured in ~/.nanobot/config.json.
+#
+# Usage:
+#   bin/record-integrations            # record all models
+#   bin/record-integrations anthropic  # record a single provider
+
+set -euo pipefail
+
+MODELS=(
+  "anthropic:claude-haiku-4-5"
+  "openai:gpt-5-mini"
+  "gemini:gemini-flash-latest"
+)
+
+run_recording() {
+  local provider="${1%%:*}"
+  local model="${1##*:}"
+
+  local cmd="NANOBOT_INTEGRATION_RECORD=true \\
+  NANOBOT_INTEGRATION_PROVIDER=${provider} \\
+  NANOBOT_INTEGRATION_MODEL=${model} \\
+  bundle exec rspec spec/integration"
+  echo "==> ${cmd}"
+  eval "$cmd"
+  echo ""
+}
+
+filter="${1:-}"
+
+for entry in "${MODELS[@]}"; do
+  provider="${entry%%:*}"
+  if [ -z "$filter" ] || [ "$filter" = "$provider" ]; then
+    run_recording "$entry"
+  fi
+done
