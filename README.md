@@ -8,17 +8,16 @@ build on.
 
 ## Overview
 
-Nanobot.rb is a Ruby port of [Nanobot](https://github.com/HKUDS/nanobot) --
-a personal AI assistant framework designed for simplicity, privacy, and
-readability. It provides the essential building blocks of an AI agent and
-stops there. Major new features belong in forks, not in this codebase.
+Nanobot.rb is a Ruby port of [Nanobot](https://github.com/HKUDS/nanobot) - a personal AI assistant framework designed for
+simplicity, privacy, and readability. It provides the essential building blocks of an AI
+agent and stops there. Major new features belong in forks, not in this codebase.
 
-- **Multi-provider LLM support** via [RubyLLM](https://rubyllm.com/) -- Anthropic, OpenAI, Gemini, DeepSeek, Ollama, OpenRouter, and [many more](https://rubyllm.com/available-models/)
-- **Built-in tools** -- file operations, shell execution, web search, web fetch
-- **Task scheduling** -- one-shot reminders, recurring intervals, and cron expressions
-- **Six channels** -- CLI, Slack, Telegram, Discord, Email, HTTP Gateway
-- **Persistent memory** -- long-term memory and daily notes across sessions
-- **Security-first** -- workspace sandboxing, command filtering, access control
+- **Multi-provider LLM support** via [RubyLLM](https://rubyllm.com/) - Anthropic, OpenAI, Gemini, DeepSeek, Ollama, OpenRouter, and [many more](https://rubyllm.com/available-models/)
+- **Built-in tools** - file operations, shell execution, web search, web fetch
+- **Task scheduling** - one-shot reminders, recurring intervals, and cron expressions
+- **Six channels** - CLI, Slack, Telegram, Discord, Email, HTTP Gateway
+- **Persistent memory** - long-term memory and daily notes across sessions
+- **Security-first** - workspace sandboxing, command filtering, access control
 
 See [docs/goals.md](docs/goals.md) for the project philosophy and
 [docs/use-cases.md](docs/use-cases.md) for detailed usage scenarios.
@@ -170,16 +169,16 @@ Configuration is stored in `~/.nanobot/config.json`:
 
 | Section            | Key                    | Description                         | Default                  |
 |--------------------|------------------------|-------------------------------------|--------------------------|
-| `provider`         |                        | Active provider name                | `anthropic`              |
-| `agents.defaults`  | `model`                | Default LLM model                   | `claude-haiku-4-5`       |
-|                    | `workspace`            | Agent workspace directory           | `~/.nanobot/workspace`   |
-|                    | `max_tokens`           | Maximum response tokens             | `4096`                   |
-|                    | `temperature`          | LLM temperature (0-1)               | `0.7`                    |
-|                    | `max_tool_iterations`  | Max tool execution cycles           | `20`                     |
-| `tools`            | `restrict_to_workspace`| Sandbox file/shell operations       | `false`                  |
-| `tools.exec`       | `timeout`              | Command execution timeout (seconds) | `60`                     |
-| `scheduler`        | `enabled`              | Enable task scheduling              | `true`                   |
-|                    | `tick_interval`        | Seconds between schedule checks     | `15`                     |
+| `provider  `         |                        | Active provider name                | `anthropic`                |
+| `agents.defaults  `  | `model`                  | Default LLM model                   | `claude-haiku-4-5`         |
+|                    | `workspace`              | Agent workspace directory           | `~/.nanobot/workspace`     |
+|                    | `max_tokens`             | Maximum response tokens             | `4096`                     |
+|                    | `temperature`            | LLM temperature (0-1)               | `0.7`                      |
+|                    | `max_tool_iterations`    | Max tool execution cycles           | `20`                       |
+| `tools`              | `restrict_to_workspace  `| Sandbox file/shell operations       | `false`                    |
+| `tools.exec`         | `timeout`                | Command execution timeout (seconds) | `60`                       |
+| `scheduler`          | `enabled`                | Enable task scheduling              | `true`                     |
+|                    | `tick_interval`          | Seconds between schedule checks     | `15`                       |
 
 ## Usage
 
@@ -480,7 +479,7 @@ See [docs/goals.md](docs/goals.md) for what belongs in a fork vs. this repo.
 
 ## Contributing
 
-Contributions that improve what exists are welcome -- bug fixes, test coverage,
+Contributions that improve what exists are welcome - bug fixes, test coverage,
 documentation, security hardening, and code clarity. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
@@ -494,6 +493,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Credits
 
 This is a Ruby port of the original [Nanobot](https://github.com/HKUDS/nanobot) Python project by the [Data Intelligence Lab at the University of Hong Kong (HKUDS)](https://github.com/HKUDS). All credit for the original design and architecture goes to them.
+
+Multi-provider LLM support is powered by [RubyLLM](https://rubyllm.com/) by [Carmine Paolino](https://github.com/crmne).
 
 ## Support
 
