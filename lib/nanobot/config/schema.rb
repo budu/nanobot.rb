@@ -105,7 +105,7 @@ module Nanobot
       # @param web [Hash] web tool settings (nested :search key)
       # @param exec [Hash] exec tool settings (see ExecToolConfig)
       # @param restrict_to_workspace [Boolean] limit file tools to workspace directory
-      def initialize(web: {}, exec: {}, restrict_to_workspace: false)
+      def initialize(web: {}, exec: {}, restrict_to_workspace: true)
         web_config = web.is_a?(Hash) ? web : {}
         exec_config = exec.is_a?(Hash) ? exec : {}
 

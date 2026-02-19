@@ -137,7 +137,7 @@ RSpec.describe Nanobot::Config do
       config = Nanobot::Config::ToolsConfig.new
       expect(config.web.search).to be_a(Nanobot::Config::WebSearchConfig)
       expect(config.exec).to be_a(Nanobot::Config::ExecToolConfig)
-      expect(config.restrict_to_workspace).to be false
+      expect(config.restrict_to_workspace).to be true
     end
 
     it 'accepts custom values' do

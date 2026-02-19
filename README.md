@@ -17,7 +17,7 @@ agent and stops there. Major new features belong in forks, not in this codebase.
 - **Task scheduling** - one-shot reminders, recurring intervals, and cron expressions
 - **Six channels** - CLI, Slack, Telegram, Discord, Email, HTTP Gateway
 - **Persistent memory** - long-term memory and daily notes across sessions
-- **Security-first** - workspace sandboxing, command filtering, access control
+- **Security-aware** - workspace sandboxing, command filtering, access control
 
 See [docs/goals.md](docs/goals.md) for the project philosophy and
 [docs/use-cases.md](docs/use-cases.md) for detailed usage scenarios.
@@ -160,7 +160,7 @@ Configuration is stored in `~/.nanobot/config.json`:
     "exec": {
       "timeout": 60
     },
-    "restrict_to_workspace": false
+    "restrict_to_workspace": true
   }
 }
 ```
@@ -175,7 +175,7 @@ Configuration is stored in `~/.nanobot/config.json`:
 |                    | `max_tokens`             | Maximum response tokens             | `4096`                     |
 |                    | `temperature`            | LLM temperature (0-1)               | `0.7`                      |
 |                    | `max_tool_iterations`    | Max tool execution cycles           | `20`                       |
-| `tools`              | `restrict_to_workspace  `| Sandbox file/shell operations       | `false`                    |
+| `tools`              | `restrict_to_workspace  `| Sandbox file/shell operations       | `true`                     |
 | `tools.exec`         | `timeout`                | Command execution timeout (seconds) | `60`                       |
 | `scheduler`          | `enabled`                | Enable task scheduling              | `true`                     |
 |                    | `tick_interval`          | Seconds between schedule checks     | `15`                       |
@@ -340,26 +340,52 @@ Bootstrap files in the workspace customize agent behavior:
 
 ## Security
 
-### Access Control
+### Threat Model
 
-- Channel-level user whitelisting via `allow_from` (for custom channel implementations)
-- Empty whitelist allows all users
-- Non-empty whitelist restricts to specified users
-
-### Command Filtering
-
-The shell execution tool blocks dangerous patterns:
-- Destructive operations (`rm -rf`, `format`, `dd`)
-- System operations (`shutdown`, `reboot`)
-- Fork bombs and recursive commands
-- Direct disk device access
+Nanobot.rb is designed as a **personal assistant for trusted environments**. It
+is adequate for single-user, self-hosted use with proper configuration. It is
+**not hardened for multi-tenant or adversarial deployments**. If you expose
+channels to untrusted users, additional hardening is required — configure
+`allow_from` whitelists, enable workspace sandboxing, and add tool confirmation
+callbacks.
 
 ### Workspace Sandboxing
 
-Enable `restrict_to_workspace: true` to:
-- Limit all file operations to workspace directory
-- Prevent access to system files
-- Isolate agent operations
+File and shell operations are sandboxed to the workspace directory by default
+(`restrict_to_workspace: true`). This prevents the agent from accessing or
+modifying files outside its workspace. The sandbox resolves symlinks to block
+escape attempts. Set `restrict_to_workspace: false` only if you understand the
+risk and trust the agent with full filesystem access.
+
+### Command Filtering
+
+The shell tool blocks common dangerous patterns (`rm -rf`, `shutdown`, `dd`,
+fork bombs, etc.) via a denylist. **This is not a true security boundary** — an
+LLM or attacker can bypass it through nested shells, alternative commands, or
+encoding tricks. It prevents accidents, not attacks. For strong isolation, use
+OS-level sandboxing (containers, seccomp, etc.).
+
+### Access Control
+
+- Channel-level user whitelisting via `allow_from`
+- Empty `allow_from` **allows all users** (a warning is logged)
+- Non-empty `allow_from` restricts to specified users only
+- For channels exposed to untrusted networks, always configure explicit
+  whitelists
+
+### SSRF Protection
+
+The web fetch tool validates URLs and blocks requests to private IP ranges
+(127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, link-local, and
+IPv6 equivalents). Redirects are re-validated at each hop. Responses are
+capped at 1 MB.
+
+### Credential Storage
+
+API keys and tokens are stored as **plaintext JSON** in `~/.nanobot/config.json`
+with `0600` file permissions. Session files are similarly protected. There is no
+encryption at rest — if your machine is compromised, credentials are exposed.
+Protect your `~/.nanobot/` directory accordingly.
 
 ## Development
 

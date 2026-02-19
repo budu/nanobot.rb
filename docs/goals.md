@@ -30,8 +30,11 @@ assistant can start here and add what they need without fighting the codebase.
 **Self-hosted and private.** Your conversations, memory, and data stay on your
 machine. No telemetry, no cloud dependencies beyond the LLM API itself.
 
-**Secure by design.** Workspace sandboxing, dangerous command filtering, access
-control, and private IP blocking are built in, not bolted on.
+**Security-aware.** Workspace sandboxing, dangerous command filtering, access
+control, and private IP blocking are included. These are adequate for personal
+use in trusted environments. They are not hardened against determined attackers
+— see the [Security section](../README.md#security) for the threat model and
+known limitations.
 
 ## What It Does
 
