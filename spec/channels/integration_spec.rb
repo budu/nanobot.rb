@@ -144,7 +144,7 @@ RSpec.describe 'Channel integration' do # rubocop:disable RSpec/DescribeClass
       config = Nanobot::Config::Config.new
       channel = test_channel_class.new(
         name: 'test_channel',
-        config: double('config', allow_from: []),
+        config: double('config', allow_from: ['*']),
         bus: bus,
         logger: logger
       )

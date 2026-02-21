@@ -54,9 +54,18 @@ RSpec.describe Nanobot::Channels::BaseChannel do
 
   describe '#allowed?' do
     context 'with empty allow_from list' do
+      it 'denies all senders' do
+        expect(channel.allowed?('user1')).to be false
+        expect(channel.allowed?('user2')).to be false
+      end
+    end
+
+    context 'with wildcard allow_from' do
+      let(:config) { double('config', allow_from: ['*']) }
+
       it 'allows all senders' do
         expect(channel.allowed?('user1')).to be true
-        expect(channel.allowed?('user2')).to be true
+        expect(channel.allowed?('anyone')).to be true
       end
     end
 
@@ -108,8 +117,10 @@ RSpec.describe Nanobot::Channels::BaseChannel do
       end
     end
 
+    let(:open_config) { double('config', allow_from: ['*']) }
+
     let(:test_channel) do
-      test_channel_class.new(name: 'test', config: config, bus: bus, logger: logger)
+      test_channel_class.new(name: 'test', config: open_config, bus: bus, logger: logger)
     end
 
     let(:message_params) do

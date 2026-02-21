@@ -32,7 +32,9 @@ module Nanobot
         raise NotImplementedError, "#{self.class} must implement #send"
       end
 
-      # Check if a sender is allowed to use this channel
+      # Check if a sender is allowed to use this channel.
+      # An empty allow_from list denies all senders (fail-closed).
+      # Use ["*"] to explicitly allow all senders.
       # @param sender_id [String] sender identifier
       # @return [Boolean]
       def allowed?(sender_id)
@@ -40,11 +42,14 @@ module Nanobot
 
         if allow_from.empty?
           unless @allow_from_warned
-            @logger.warn "Channel '#{@name}' has no allow_from restrictions - accepting all senders"
+            @logger.warn "Channel '#{@name}' has an empty allow_from list - denying all senders. " \
+                         'Set allow_from: ["*"] to allow everyone.'
             @allow_from_warned = true
           end
-          return true
+          return false
         end
+
+        return true if allow_from.include?('*')
 
         allow_from.include?(sender_id.to_s)
       end

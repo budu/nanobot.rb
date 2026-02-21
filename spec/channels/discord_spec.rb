@@ -22,7 +22,7 @@ end
 require 'nanobot/channels/discord'
 
 RSpec.describe Nanobot::Channels::Discord do
-  let(:config) { double('config', token: 'test-token', allow_from: []) }
+  let(:config) { double('config', token: 'test-token', allow_from: ['*']) }
   let(:bus) { instance_double(Nanobot::Bus::MessageBus) }
   let(:logger) { test_logger }
   let(:bot) { double('bot') }

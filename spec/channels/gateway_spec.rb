@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'nanobot/channels/gateway'
 
 RSpec.describe Nanobot::Channels::Gateway do
-  let(:config) { double('config', allow_from: [], port: 0, host: '127.0.0.1', auth_token: nil) }
+  let(:config) { double('config', allow_from: ['*'], port: 0, host: '127.0.0.1', auth_token: nil) }
   let(:bus) { instance_double(Nanobot::Bus::MessageBus) }
   let(:logger) { test_logger }
 
@@ -279,7 +279,7 @@ RSpec.describe Nanobot::Channels::Gateway do
     end
 
     context 'with auth_token configured' do
-      let(:config) { double('config', allow_from: [], port: 0, host: '127.0.0.1', auth_token: 'secret-token') }
+      let(:config) { double('config', allow_from: ['*'], port: 0, host: '127.0.0.1', auth_token: 'secret-token') }
 
       it 'returns true for valid Bearer token' do
         req = double('request')
@@ -317,7 +317,7 @@ RSpec.describe Nanobot::Channels::Gateway do
   end
 
   describe 'authentication in HTTP request flow' do
-    let(:config) { double('config', allow_from: [], port: 0, host: '127.0.0.1', auth_token: 'my-token') }
+    let(:config) { double('config', allow_from: ['*'], port: 0, host: '127.0.0.1', auth_token: 'my-token') }
 
     it 'rejects requests with invalid auth token with 401' do
       req = double('request', request_method: 'POST', body: '{"message":"hello"}')

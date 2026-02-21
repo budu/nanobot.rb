@@ -27,7 +27,7 @@ RSpec.describe Nanobot::Channels::Email do
       mark_seen: true,
       max_body_chars: 12_000,
       subject_prefix: 'Re: ',
-      allow_from: []
+      allow_from: ['*']
     )
   end
 
