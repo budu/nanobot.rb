@@ -11,7 +11,27 @@ module Nanobot
       # (e.g., /home/user/workspace_evil bypassing /home/user/workspace)
       # or symlink-based escapes (e.g., ln -s /etc /workspace/escape).
       module WorkspaceSandbox
+        # Bootstrap files that shape the agent's system prompt.
+        # The agent must not modify these to prevent self-modification
+        # attacks (e.g., prompt injection rewriting SOUL.md to alter
+        # the agent's behavior persistently).
+        PROTECTED_FILENAMES = %w[
+          AGENTS.md SOUL.md USER.md TOOLS.md IDENTITY.md MEMORY.md
+        ].freeze
+
         private
+
+        # Check whether a path targets a protected bootstrap file.
+        # @param path [Pathname] path to check
+        # @return [Boolean]
+        def protected_path?(path)
+          return false unless @allowed_dir
+
+          resolved = resolve_real_path(path)
+          PROTECTED_FILENAMES.any? do |name|
+            resolved == File.join(@allowed_dir.to_s, name)
+          end
+        end
 
         # Check whether a path resides within the allowed workspace directory.
         # @param path [Pathname] path to check
@@ -104,6 +124,8 @@ module Nanobot
             return "Error: Access denied. Path is outside allowed directory: #{@allowed_dir}"
           end
 
+          return "Error: Access denied. Bootstrap file #{file_path.basename} is read-only." if protected_path?(file_path)
+
           begin
             # Ensure parent directory exists
             file_path.dirname.mkpath unless file_path.dirname.exist?
@@ -143,6 +165,8 @@ module Nanobot
           if @allowed_dir && !within_allowed_dir?(file_path)
             return "Error: Access denied. Path is outside allowed directory: #{@allowed_dir}"
           end
+
+          return "Error: Access denied. Bootstrap file #{file_path.basename} is read-only." if protected_path?(file_path)
 
           return "Error: File not found: #{path}" unless file_path.exist?
           return "Error: Path is not a file: #{path}" unless file_path.file?
