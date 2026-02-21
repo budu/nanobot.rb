@@ -56,32 +56,32 @@ RSpec.describe Nanobot::Agent::Tools::Exec do
 
     it 'blocks dangerous rm -rf commands' do
       result = tool.execute(command: 'rm -rf /')
-      expect(result).to include('Error: Command blocked for security reasons')
+      expect(result).to include('Error: Command blocked')
     end
 
     it 'blocks shutdown commands' do
       result = tool.execute(command: 'shutdown now')
-      expect(result).to include('Error: Command blocked for security reasons')
+      expect(result).to include('Error: Command blocked')
     end
 
     it 'blocks reboot commands' do
       result = tool.execute(command: 'reboot')
-      expect(result).to include('Error: Command blocked for security reasons')
+      expect(result).to include('Error: Command blocked')
     end
 
     it 'blocks format commands' do
       result = tool.execute(command: 'format c:')
-      expect(result).to include('Error: Command blocked for security reasons')
+      expect(result).to include('Error: Command blocked')
     end
 
     it 'blocks dd commands to devices' do
       result = tool.execute(command: 'dd if=/dev/zero of=/dev/sda')
-      expect(result).to include('Error: Command blocked for security reasons')
+      expect(result).to include('Error: Command blocked')
     end
 
     it 'blocks fork bombs' do
       result = tool.execute(command: ':(){:|:&};:')
-      expect(result).to include('Error: Command blocked for security reasons')
+      expect(result).to include('Error: Command blocked')
     end
 
     it 'handles timeout' do

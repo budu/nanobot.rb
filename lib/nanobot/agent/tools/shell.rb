@@ -7,12 +7,19 @@ require 'ruby_llm'
 module Nanobot
   module Agent
     module Tools
-      # Tool for executing shell commands with security restrictions
+      # Tool for executing shell commands.
+      #
+      # IMPORTANT: The DENY_PATTERNS list below is accident prevention, not a
+      # security boundary. It catches common destructive typos and mistakes but
+      # is trivially bypassed (nested shells, alternative interpreters, creative
+      # flag combinations, data exfiltration via curl/wget, etc.).
+      # For actual isolation, use OS-level sandboxing (bubblewrap, containers).
       class Exec < RubyLLM::Tool
         description 'Execute a shell command and return its output'
         param :command, desc: 'Shell command to execute', required: true
 
-        # Dangerous command patterns that should be blocked
+        # Common destructive patterns blocked as accident prevention.
+        # NOT a security boundary — see class comment above.
         DENY_PATTERNS = [
           /rm\s+-rf/i,
           %r{rmdir\s+/s}i,
@@ -41,8 +48,8 @@ module Nanobot
         # @param command [String] shell command to execute
         # @return [String] formatted output with exit code, stdout, and stderr
         def execute(command:)
-          # Security: Check for dangerous patterns
-          return 'Error: Command blocked for security reasons. Contains dangerous patterns.' if dangerous?(command)
+          # Accident prevention: block common destructive patterns
+          return 'Error: Command blocked — matches a known destructive pattern.' if dangerous?(command)
 
           # Best-effort workspace restriction.
           # NOTE: This is NOT a true security boundary.
