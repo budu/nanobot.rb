@@ -129,10 +129,18 @@ module Nanobot
         @logger.error "Error in process_message: #{e.message}"
         @logger.error e.backtrace.join("\n")
 
+        # Don't leak exception details (file paths, credentials, stack traces)
+        # to remote channels. Local CLI gets the full message for debugging.
+        error_content = if LOCAL_CHANNELS.include?(msg.channel)
+                          "Sorry, I encountered an error: #{e.message}"
+                        else
+                          'Sorry, I encountered an internal error. Check the server logs for details.'
+                        end
+
         Bus::OutboundMessage.new(
           channel: msg.channel,
           chat_id: msg.chat_id,
-          content: "Sorry, I encountered an error: #{e.message}"
+          content: error_content
         )
       end
 
