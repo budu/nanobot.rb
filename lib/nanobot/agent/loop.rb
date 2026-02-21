@@ -113,7 +113,7 @@ module Nanobot
         session.add_message('user', msg.content)
 
         # Agent loop (also saves intermediate tool call messages to session)
-        final_content = agent_loop(messages, session: session)
+        final_content = agent_loop(messages, session: session, channel: msg.channel)
 
         # Save final assistant response to session
         session.add_message('assistant', final_content)
@@ -142,8 +142,10 @@ module Nanobot
       # the LLM returns a final text response or max_iterations is reached
       # @param messages [Array<Hash>] message history in OpenAI format
       # @param session [Session::Session, nil] current session for persistence
+      # @param channel [String] channel name for tool scoping
       # @return [String] final response content
-      def agent_loop(messages, session: nil)
+      def agent_loop(messages, session: nil, channel: 'cli')
+        tools = tools_for_channel(channel)
         iteration = 0
 
         while iteration < @max_iterations
@@ -151,7 +153,7 @@ module Nanobot
           @logger.debug "--- Agent loop iteration #{iteration}/#{@max_iterations} ---"
           @logger.debug "Message history size: #{messages.length} messages"
 
-          response = @provider.chat(messages: messages, tools: @tool_instances, model: @model)
+          response = @provider.chat(messages: messages, tools: tools, model: @model)
 
           if response.finish_reason == 'error'
             @logger.error "LLM API error: #{response.content}"
@@ -163,7 +165,7 @@ module Nanobot
             return response.content || "I've completed processing."
           end
 
-          process_tool_calls(response, messages, session)
+          process_tool_calls(response, messages, session, tools)
         end
 
         @logger.warn "Max iterations (#{@max_iterations}) reached"
@@ -174,7 +176,8 @@ module Nanobot
       # @param response [Provider::Response] LLM response containing tool calls
       # @param messages [Array<Hash>] message history to append to
       # @param session [Session::Session, nil] session for persistence
-      def process_tool_calls(response, messages, session)
+      # @param tools [Array<RubyLLM::Tool>] tools available for this request
+      def process_tool_calls(response, messages, session, tools)
         @logger.debug "Got #{response.tool_calls.length} tool call(s)"
 
         payload = serialize_tool_calls(response.tool_calls)
@@ -183,7 +186,7 @@ module Nanobot
         session&.add_message('assistant', response.content || '', tool_calls: payload)
 
         response.tool_calls.each do |tool_call|
-          result_str = execute_tool_call(tool_call)
+          result_str = execute_tool_call(tool_call, tools)
           messages << { role: 'tool', tool_call_id: tool_call.id, name: tool_call.name, content: result_str }
           session&.add_message('tool', result_str)
         end
@@ -202,26 +205,30 @@ module Nanobot
 
       # Execute a single tool call, checking user confirmation if configured
       # @param tool_call [Object] tool call with #name, #id, and #arguments
+      # @param tools [Array<RubyLLM::Tool>] tools available for this request
       # @return [String] tool execution result
-      def execute_tool_call(tool_call)
+      def execute_tool_call(tool_call, tools)
         @logger.debug "Executing tool: #{tool_call.name} id=#{tool_call.id}"
         @logger.debug "  Arguments: #{tool_call.arguments}"
 
         result_str = if @confirm_tool_call && !@confirm_tool_call.call(tool_call.name, tool_call.arguments)
                        'Error: Tool execution was denied by user.'
                      else
-                       run_tool(tool_call)
+                       run_tool(tool_call, tools)
                      end
 
         @logger.debug "  Result (#{result_str.length} chars): #{result_str.slice(0, 1000)}"
         result_str
       end
 
-      # Look up and invoke the tool by name
+      # Look up and invoke the tool by name from the scoped tool set.
+      # Only tools in the provided set can be invoked — this enforces
+      # per-channel tool restrictions even if the LLM hallucinates tool names.
       # @param tool_call [Object] tool call with #name and #arguments
+      # @param tools [Array<RubyLLM::Tool>] scoped tool set
       # @return [String] tool result or error message
-      def run_tool(tool_call)
-        tool = @tool_instances.find { |t| t.name == tool_call.name }
+      def run_tool(tool_call, tools)
+        tool = tools.find { |t| t.name == tool_call.name }
         return "Error: Tool '#{tool_call.name}' not found" unless tool
 
         result = tool.call(tool_call.arguments)
@@ -253,6 +260,23 @@ module Nanobot
           'Send any other message to chat with the AI assistant.'
       end
 
+      # Channels considered local (full tool access by default)
+      LOCAL_CHANNELS = %w[cli].freeze
+
+      # Return the tools available for a given channel.
+      # Remote channels (Telegram, Discord, Slack, Email, Gateway) get
+      # read-only tools by default to limit blast radius from prompt
+      # injection or unauthorized senders.
+      # @param channel [String] channel name
+      # @return [Array<RubyLLM::Tool>] tools available for this channel
+      def tools_for_channel(channel)
+        if LOCAL_CHANNELS.include?(channel)
+          @tool_instances
+        else
+          @read_only_tools
+        end
+      end
+
       # Register default tools (RubyLLM-compatible)
       def register_default_tools
         require_relative 'tools/filesystem'
@@ -261,31 +285,39 @@ module Nanobot
 
         allowed_dir = @restrict_to_workspace ? @workspace : nil
 
-        # Create tool instances
-        @tool_instances = []
+        # Read-only tools (safe for remote channels)
+        read_file = Tools::ReadFile.new(allowed_dir: allowed_dir)
+        list_dir = Tools::ListDir.new(allowed_dir: allowed_dir)
+        web_search = @brave_api_key ? Tools::WebSearch.new(api_key: @brave_api_key) : nil
+        web_fetch = Tools::WebFetch.new
 
-        @tool_instances << Tools::ReadFile.new(allowed_dir: allowed_dir)
-        @tool_instances << Tools::WriteFile.new(allowed_dir: allowed_dir)
-        @tool_instances << Tools::EditFile.new(allowed_dir: allowed_dir)
-        @tool_instances << Tools::ListDir.new(allowed_dir: allowed_dir)
+        @read_only_tools = [read_file, list_dir, web_fetch]
+        @read_only_tools << web_search if web_search
 
-        @tool_instances << Tools::Exec.new(
+        # Write/exec tools (local channels only by default)
+        write_file = Tools::WriteFile.new(allowed_dir: allowed_dir)
+        edit_file = Tools::EditFile.new(allowed_dir: allowed_dir)
+        exec_tool = Tools::Exec.new(
           working_dir: @workspace.to_s,
           timeout: @exec_config[:timeout] || 60,
           restrict_to_workspace: @restrict_to_workspace
         )
 
-        @tool_instances << Tools::WebSearch.new(api_key: @brave_api_key) if @brave_api_key
-        @tool_instances << Tools::WebFetch.new
+        # Full tool set
+        @tool_instances = @read_only_tools + [write_file, edit_file, exec_tool]
 
         if @schedule_store
           require_relative 'tools/schedule'
-          @tool_instances << Tools::ScheduleAdd.new(store: @schedule_store)
-          @tool_instances << Tools::ScheduleList.new(store: @schedule_store)
-          @tool_instances << Tools::ScheduleRemove.new(store: @schedule_store)
+          schedule_tools = [
+            Tools::ScheduleAdd.new(store: @schedule_store),
+            Tools::ScheduleList.new(store: @schedule_store),
+            Tools::ScheduleRemove.new(store: @schedule_store)
+          ]
+          @tool_instances += schedule_tools
+          @read_only_tools << Tools::ScheduleList.new(store: @schedule_store)
         end
 
-        @logger.info "Registered #{@tool_instances.length} RubyLLM tools"
+        @logger.info "Registered #{@tool_instances.length} tools (#{@read_only_tools.length} read-only)"
       end
     end
   end
