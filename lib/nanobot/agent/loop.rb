@@ -31,7 +31,7 @@ module Nanobot
         @max_iterations = opts[:max_iterations] || 20
         @brave_api_key = opts[:brave_api_key]
         @exec_config = opts[:exec_config] || {}
-        @restrict_to_workspace = opts[:restrict_to_workspace] || false
+        @restrict_to_workspace = opts.fetch(:restrict_to_workspace, true)
         @confirm_tool_call = opts[:confirm_tool_call]
         @schedule_store = opts[:schedule_store]
         @logger = logger || Logger.new(IO::NULL)
