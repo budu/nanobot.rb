@@ -124,7 +124,9 @@ module Nanobot
             return "Error: Access denied. Path is outside allowed directory: #{@allowed_dir}"
           end
 
-          return "Error: Access denied. Bootstrap file #{file_path.basename} is read-only." if protected_path?(file_path)
+          if protected_path?(file_path)
+            return "Error: Access denied. Bootstrap file #{file_path.basename} is read-only."
+          end
 
           begin
             # Ensure parent directory exists
@@ -166,7 +168,9 @@ module Nanobot
             return "Error: Access denied. Path is outside allowed directory: #{@allowed_dir}"
           end
 
-          return "Error: Access denied. Bootstrap file #{file_path.basename} is read-only." if protected_path?(file_path)
+          if protected_path?(file_path)
+            return "Error: Access denied. Bootstrap file #{file_path.basename} is read-only."
+          end
 
           return "Error: File not found: #{path}" unless file_path.exist?
           return "Error: Path is not a file: #{path}" unless file_path.file?

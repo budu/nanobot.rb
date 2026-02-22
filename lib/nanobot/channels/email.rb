@@ -158,9 +158,7 @@ module Nanobot
         parsed = ::Mail.new(data.attr['RFC822'])
         sender = parsed.from&.first&.downcase
         return unless sender
-        unless @config.allow_from.include?('*') || @config.allow_from.include?(sender)
-          return
-        end
+        return unless @config.allow_from.include?('*') || @config.allow_from.include?(sender)
 
         item = build_message_item(parsed, sender)
         track_uid(imap, uid)

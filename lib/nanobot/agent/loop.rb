@@ -126,25 +126,32 @@ module Nanobot
           content: final_content
         )
       rescue StandardError => e
-        @logger.error "Error in process_message: #{e.message}"
-        @logger.error e.backtrace.join("\n")
+        handle_processing_error(msg, e)
+      end
+
+      # Channels considered local (full tool access by default)
+      LOCAL_CHANNELS = %w[cli].freeze
+
+      private
+
+      # Build an error response, sanitizing details for remote channels.
+      # @param msg [Bus::InboundMessage] the original message
+      # @param error [StandardError] the exception that occurred
+      # @return [Bus::OutboundMessage]
+      def handle_processing_error(msg, error)
+        @logger.error "Error in process_message: #{error.message}"
+        @logger.error error.backtrace.join("\n")
 
         # Don't leak exception details (file paths, credentials, stack traces)
         # to remote channels. Local CLI gets the full message for debugging.
         error_content = if LOCAL_CHANNELS.include?(msg.channel)
-                          "Sorry, I encountered an error: #{e.message}"
+                          "Sorry, I encountered an error: #{error.message}"
                         else
                           'Sorry, I encountered an internal error. Check the server logs for details.'
                         end
 
-        Bus::OutboundMessage.new(
-          channel: msg.channel,
-          chat_id: msg.chat_id,
-          content: error_content
-        )
+        Bus::OutboundMessage.new(channel: msg.channel, chat_id: msg.chat_id, content: error_content)
       end
-
-      private
 
       # Main agent loop: repeatedly calls LLM and executes tool calls until
       # the LLM returns a final text response or max_iterations is reached
@@ -267,9 +274,6 @@ module Nanobot
           "/help - Show this help message\n\n" \
           'Send any other message to chat with the AI assistant.'
       end
-
-      # Channels considered local (full tool access by default)
-      LOCAL_CHANNELS = %w[cli].freeze
 
       # Return the tools available for a given channel.
       # Remote channels (Telegram, Discord, Slack, Email, Gateway) get
