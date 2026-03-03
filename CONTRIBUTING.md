@@ -166,6 +166,104 @@ When filing a bug report, please include:
 4. **Environment**: Ruby version, OS, nanobot.rb version
 5. **Error output**: Stack trace or log messages
 
+## Releasing
+
+This section is for maintainers. It covers the full process for publishing a
+new version to RubyGems.
+
+### 1. Decide the Version
+
+Follow [Semantic Versioning](https://semver.org/):
+
+- **patch** (0.1.1) -- bug fixes, documentation, minor improvements
+- **minor** (0.2.0) -- new features, backwards-compatible changes
+- **major** (1.0.0) -- breaking changes
+
+### 2. Update the Version
+
+Edit `lib/nanobot/version.rb`:
+
+```ruby
+module Nanobot
+  VERSION = '0.2.0'
+end
+```
+
+### 3. Update the Changelog
+
+Move entries from `[Unreleased]` into a new version section in `CHANGELOG.md`
+with today's date:
+
+```markdown
+## [Unreleased]
+
+## [0.2.0] - YYYY-MM-DD
+
+### Added
+- ...
+
+### Fixed
+- ...
+```
+
+Follow the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+Use `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, and `Security`
+subsections as appropriate.
+
+### 4. Run the Full Check
+
+Make sure tests and linting pass:
+
+```bash
+bundle exec rspec
+bundle exec rubocop
+```
+
+### 5. Commit the Release
+
+```bash
+git add lib/nanobot/version.rb CHANGELOG.md
+git commit -m "chore: release vX.Y.Z"
+```
+
+### 6. Tag the Release
+
+Create an annotated tag:
+
+```bash
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+```
+
+### 7. Build and Push the Gem
+
+```bash
+gem build nanobot.gemspec
+gem push nanobot-X.Y.Z.gem
+```
+
+This requires a RubyGems account with push access and MFA (the gemspec
+enforces `rubygems_mfa_required`).
+
+### 8. Push to GitHub
+
+Push the commit and tag:
+
+```bash
+git push origin main
+git push origin vX.Y.Z
+```
+
+### 9. Clean Up
+
+Remove the built gem file:
+
+```bash
+rm nanobot-X.Y.Z.gem
+```
+
+Optionally create a GitHub release from the tag, copying the relevant
+changelog section as the release notes.
+
 ## Questions?
 
 Open an issue or start a GitHub discussion. We're happy to help.
