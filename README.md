@@ -1,5 +1,6 @@
 # Nanobot.rb
 
+[![Gem Version](https://img.shields.io/gem/v/nanobot)](https://rubygems.org/gems/nanobot)
 [![Ruby](https://img.shields.io/badge/Ruby-4.0%2B-blue)](https://www.ruby-lang.org/)
 
 A minimal, complete personal AI assistant framework. Small enough to read in
@@ -59,7 +60,7 @@ bundle install
 bundle exec rspec
 ```
 
-### As a Gem (Coming Soon)
+### As a Gem
 
 ```bash
 gem install nanobot
@@ -70,7 +71,7 @@ gem install nanobot
 ### 1. Initialize Nanobot
 
 ```bash
-bundle exec bin/nanobot onboard
+nanobot onboard
 ```
 
 This creates the configuration directory at `~/.nanobot/` with:
@@ -114,13 +115,13 @@ of supported providers and models, see [RubyLLM Available Models](https://rubyll
 
 ```bash
 # Interactive mode
-bundle exec bin/nanobot agent
+nanobot agent
 
 # Single message
-bundle exec bin/nanobot agent -m "What's the weather like?"
+nanobot agent -m "What's the weather like?"
 
 # With specific model
-bundle exec bin/nanobot agent --model openai/gpt-4o-mini -m "Write a haiku"
+nanobot agent --model openai/gpt-4o-mini -m "Write a haiku"
 ```
 
 ## Configuration
@@ -186,19 +187,19 @@ Configuration is stored in `~/.nanobot/config.json`:
 
 ```bash
 # Start interactive agent
-bundle exec bin/nanobot agent
+nanobot agent
 
 # Single message mode
-bundle exec bin/nanobot agent -m "Calculate fibonacci(10)"
+nanobot agent -m "Calculate fibonacci(10)"
 
 # Use specific model
-bundle exec bin/nanobot agent --model openai/gpt-4o-mini
+nanobot agent --model openai/gpt-4o-mini
 
 # Check configuration
-bundle exec bin/nanobot status
+nanobot status
 
 # Initialize configuration
-bundle exec bin/nanobot onboard
+nanobot onboard
 ```
 
 ### Ruby API
